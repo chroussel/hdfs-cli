@@ -1,0 +1,18 @@
+[package]
+name = "hdfs"
+version = "0.1.0"
+authors = ["Charles Roussel <c.roussel@criteo.com>"]
+build= "build.rs"
+
+[lib]
+name = "hdfs"
+path = "src/lib.rs"
+
+[dependencies]
+libc = "0.2.43"
+log = "0.4.5"
+regex = "1.0.4"
+lazy_static = "1.1.0"
+itertools = "0.7.8"
+[build-dependencies]
+gcc = "0.3.54"

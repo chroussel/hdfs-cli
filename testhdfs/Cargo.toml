@@ -1,0 +1,7 @@
+[package]
+name = "testhdfs"
+version = "0.1.0"
+authors = ["Charles Roussel <c.roussel@criteo.com>"]
+
+[dependencies]
+hdfs = { path= "../hdfs" }
