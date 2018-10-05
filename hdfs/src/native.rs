@@ -19,6 +19,16 @@ pub enum tObjectKind {
 }
 
 #[repr(C)]
+pub struct hdfsEncryptionFileInfo {
+    pub mSuite: c_int,
+    pub mCryptoProtocolVersion: c_int,
+    pub mKey: *const c_char,
+    pub mKeyName: *const c_char,
+    pub mIv: *const c_char,
+    pub mEzKeyVersionName: *const c_char,
+}
+
+#[repr(C)]
 pub struct hdfsFileInfo {
     /// file or directory
     pub mKind: tObjectKind,
@@ -40,6 +50,8 @@ pub struct hdfsFileInfo {
     pub mPermissions: c_short,
     /// the last access time for the file in seconds
     pub mLastAccess: tTime,
+
+    pub mHdfsEncryptionFileInfo: *const hdfsEncryptionFileInfo,
 }
 
 pub enum hdfsBuilder {}
@@ -47,11 +59,23 @@ pub enum hdfsFS {}
 
 #[link(name = "hdfs3")]
 extern "C" {
-    pub fn hdfsNewBuilder() -> *const hdfsBuilder;
+    pub fn hdfsNewBuilder() -> *mut hdfsBuilder;
 
-    pub fn hdfsBuilderConnect(bld: *const hdfsBuilder) -> *const hdfsFS;
-    pub fn hdfsBuilderSetNameNode(bld: *const hdfsBuilder, namenode: *const c_char);
-    pub fn hdfsBuilderSetNameNodePort(bld: *const hdfsBuilder, port: tPort);
+    //, const char * effective_user=
+    //pub fn hdfsBuilderConnect(bld: *const hdfsBuilder) -> *const hdfsFS;
+    pub fn hdfsBuilderConnect(
+        bld: *mut hdfsBuilder,
+        effective_user: *const c_char,
+    ) -> *const hdfsFS;
+    pub fn hdfsBuilderSetForceNewInstance(bld: *mut hdfsBuilder);
+    pub fn hdfsBuilderSetNameNode(bld: *mut hdfsBuilder, namenode: *const c_char);
+    pub fn hdfsBuilderSetNameNodePort(bld: *mut hdfsBuilder, port: tPort);
+    pub fn hdfsFreeBuilder(bld: *mut hdfsBuilder);
+    pub fn hdfsBuilderConfSetStr(
+        bld: *mut hdfsBuilder,
+        key: *const c_char,
+        val: *const c_char,
+    ) -> c_int;
     pub fn hdfsGetLastError() -> *const c_char;
     pub fn hdfsListDirectory(
         fs: *const hdfsFS,

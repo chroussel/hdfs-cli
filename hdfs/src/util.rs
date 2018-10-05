@@ -3,10 +3,25 @@ use std::ffi::{CStr, CString};
 use std::str;
 
 pub fn str_to_chars(s: &str) -> *const c_char {
-    CString::new(s.as_bytes()).unwrap().as_ptr()
+    let cs = CString::new(s.as_bytes()).unwrap();
+    let p = cs.as_ptr();
+
+    // We need to forget cstring variable as at the end of the scope the value will be freed.
+    std::mem::forget(cs);
+    p
 }
 
 pub fn chars_to_str<'a>(chars: *const c_char) -> &'a str {
-    let slice = unsafe { CStr::from_ptr(chars) }.to_bytes();
-    str::from_utf8(slice).unwrap()
+    unsafe { CStr::from_ptr(chars).to_str().unwrap() }
+}
+
+#[cfg(test)]
+mod test {
+    use util;
+    #[test]
+    fn test_str_to_chars() {
+        let blah = util::str_to_chars("blah");
+        let result = util::chars_to_str(blah);
+        assert_eq!("blah", result);
+    }
 }

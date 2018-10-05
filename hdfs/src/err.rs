@@ -6,8 +6,10 @@ pub enum HdfsErr {
     FileNotFound(String),
     DirectoryNotFound(String),
     InvalidXmlFile(String),
-    CannotConnectToNameNode(String),
+    CannotConnectToNameNode((String, String)),
     Io(io::Error),
+    MissingConfig(String),
+    ErrorCreatingBuilder,
 }
 
 impl From<io::Error> for HdfsErr {

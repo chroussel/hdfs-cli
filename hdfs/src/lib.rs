@@ -4,6 +4,7 @@ extern crate log;
 extern crate lazy_static;
 extern crate itertools;
 extern crate libc;
+extern crate quick_xml;
 extern crate regex;
 pub mod conf;
 pub mod err;
