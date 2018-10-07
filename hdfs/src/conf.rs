@@ -3,9 +3,7 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 use regex::Regex;
 use std::collections::HashMap;
-use std::fmt;
 use std::fs::File;
-use std::io::BufRead;
 use std::io::BufReader;
 use std::path::Path;
 

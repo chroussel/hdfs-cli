@@ -8,6 +8,7 @@ use libc::{
 };
 use std::ptr;
 
+type tSize = int32_t;
 type tTime = time_t;
 type tOffset = int64_t;
 type tPort = uint16_t;
@@ -54,6 +55,7 @@ pub struct hdfsFileInfo {
     pub mHdfsEncryptionFileInfo: *const hdfsEncryptionFileInfo,
 }
 
+pub enum hdfsFile {}
 pub enum hdfsBuilder {}
 pub enum hdfsFS {}
 
@@ -76,10 +78,50 @@ extern "C" {
         key: *const c_char,
         val: *const c_char,
     ) -> c_int;
+
+    pub fn hdfsDisconnect(fs: *const hdfsFS) -> c_int;
     pub fn hdfsGetLastError() -> *const c_char;
     pub fn hdfsListDirectory(
         fs: *const hdfsFS,
         path: *const c_char,
         numEntries: *mut c_int,
     ) -> *const hdfsFileInfo;
+
+    pub fn hdfsFreeFileInfo(infos: *const hdfsFileInfo, numEntries: c_int);
+
+    pub fn hdfsOpenFile(
+        fs: *const hdfsFS,
+        path: *const c_char,
+        flags: c_int,
+        bufferSize: c_int,
+        replication: c_short,
+        blocksize: tOffset,
+    ) -> *const hdfsFile;
+
+    pub fn hdfsCloseFile(fs: *const hdfsFS, file: *const hdfsFile) -> c_int;
+
+    pub fn hdfsRead(
+        fs: *const hdfsFS,
+        file: *const hdfsFile,
+        buffer: *mut c_void,
+        length: tSize,
+    ) -> tSize;
+
+    pub fn hdfsWrite(
+        fs: *const hdfsFS,
+        file: *const hdfsFile,
+        buffer: *const c_void,
+        length: tSize,
+    ) -> tSize;
+
+    pub fn hdfsDelete(fs: *const hdfsFS, path: *const c_char) -> c_int;
+
+    pub fn hdfsExists(fs: *const hdfsFS, path: *const c_char) -> c_int;
+
+    pub fn hdfsFlush(fs: *const hdfsFS, file: *const hdfsFile) -> c_int;
+
+    pub fn hdfsCopy(srcFS: *const hdfsFS , src: *const c_char, dstFS: *const hdfsFS, dst: *const c_char);
+    pub fn hdfsMove(srcFS: *const hdfsFS , src: *const c_char, dstFS: *const hdfsFS, dst: *const c_char);
+    pub fn hdfsRename(srcFS: *const hdfsFS , src: *const c_char, dst: *const c_char);
+    pub fn hdfsCreateDirectory(fs: *const hdfsFS, path: *const c_char) -> c_int;
 }

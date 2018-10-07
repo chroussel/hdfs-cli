@@ -1,9 +1,10 @@
-use libc::{c_char, c_int};
+use libc::c_char;
 use std::ffi::{CStr, CString};
 use std::str;
 
+/// Memory may be leaking there
 pub fn str_to_chars(s: &str) -> *const c_char {
-    let cs = CString::new(s.as_bytes()).unwrap();
+    let cs = CString::new(s).unwrap();
     let p = cs.as_ptr();
 
     // We need to forget cstring variable as at the end of the scope the value will be freed.
