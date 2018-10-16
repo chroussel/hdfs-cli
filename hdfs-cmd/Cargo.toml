@@ -1,13 +1,10 @@
 [package]
-name = "testhdfs"
+name = "hdfs-cmd"
 version = "0.1.0"
 authors = ["Charles Roussel <c.roussel@criteo.com>"]
-build= "build.rs"
 
 [dependencies]
 hdfs = { path= "../hdfs" }
 log = "0.4.5"
 env_logger = "0.5.13"
-
-[build-dependencies]
-gcc = "0.3.55"
+clap = {version= "2.32.0", features = ["yaml"] }

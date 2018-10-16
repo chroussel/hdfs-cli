@@ -119,8 +119,8 @@ impl Config {
         (None, None)
     }
 
-    pub fn get_string(&self, key: &str) -> Option<&std::string::String> {
-        self.config_map.get(key)
+    pub fn get_string(&self, key: &str) -> Option<&str> {
+        self.config_map.get(key).map(|s| s.as_str())
     }
 
     pub fn get_all_key_values(&self) -> Vec<(String, String)> {

@@ -1,21 +1,23 @@
 #![allow(unused_imports)]
 use conf;
 use err::HdfsErr;
+use glob::Pattern;
 use libc::{
     c_char, c_int, c_short, c_uchar, c_void, int16_t, int32_t, int64_t, size_t, time_t, uint16_t,
 };
 use native;
 use nix::fcntl::OFlag;
+use std::cmp;
 use std::fmt;
+use std::io::Error;
+use std::io::Read;
+use std::io::Write;
 use std::mem;
-use std::path::Path;
+use std::path::{self, Component, Path, PathBuf};
 use std::ptr;
 use std::rc::Rc;
 use std::slice;
 use util::*;
-use std::io::Read;
-use std::io::Write;
-use std::io::Error;
 
 const HOST_STRING: &'static str = "host";
 const HOST_PORT: &'static str = "port";
@@ -26,8 +28,8 @@ pub struct HDFileSystem {
 
 pub fn get_hdfs(
     config_path: &Path,
-    host: Option<&String>,
-    effective_user: Option<&String>,
+    host: Option<&str>,
+    effective_user: Option<&str>,
 ) -> Result<HDFileSystem, HdfsErr> {
     let config = conf::Config::new(config_path)?;
 
@@ -44,8 +46,8 @@ pub fn get_hdfs(
     info!("Set namenode to {}", namenode);
 
     unsafe { native::hdfsBuilderSetForceNewInstance(builder) };
-    
-    unsafe { native::hdfsBuilderSetNameNode(builder, str_to_chars(namenode.as_str())) };
+
+    unsafe { native::hdfsBuilderSetNameNode(builder, str_to_chars(namenode)) };
 
     if let Some(port) = config.get::<u16>(HOST_PORT) {
         info!("Set port to {}", port);
@@ -87,16 +89,102 @@ pub fn get_hdfs(
 }
 
 enum ObjectKind {
+    Unknown,
     File,
     Directory,
 }
 
+impl ObjectKind {
+    fn fromtObjectKind(tObjectKind: native::tObjectKind) -> ObjectKind {
+        match tObjectKind {
+            native::tObjectKind::kObjectKindFile => ObjectKind::File,
+            native::tObjectKind::kObjectKindDirectory => ObjectKind::Directory,
+            _ => ObjectKind::Unknown,
+        }
+    }
+}
+
 pub struct FileInfo {
     pub name: String,
+    pub kind: ObjectKind,
+}
+
+pub struct Listing {
+    pub path: String,
+    pub kind: ObjectKind,
+    pub files: Vec<FileInfo>,
 }
 
 impl HDFileSystem {
-    pub fn ls(&self, path: &str) -> Result<Vec<FileInfo>, HdfsErr> {
+    pub fn globPath(&self, pattern: &str) -> Result<Vec<Listing>, HdfsErr> {
+        let _pattern = Pattern::new(pattern)?;
+
+        let components = Path::new(pattern).components().peekable();
+
+        loop {
+            match components.peek() {
+                Some(&Component::RootDir) => {
+                    components.next();
+                }
+                _ => {
+                    break;
+                }
+            }
+        }
+
+        let rest = components.map(|s| s.as_os_str()).collect::<PathBuf>();
+        let normalized_pattern = Path::new(pattern).iter().collect::<PathBuf>();
+        let root_len = normalized_pattern.to_str().unwrap().len() - rest.to_str().unwrap().len();
+        let root = if root_len > 0 {
+            Some(Path::new(&pattern[..root_len]))
+        } else {
+            None
+        };
+
+        let scope = root
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("."));
+        let mut dir_patterns = Vec::new();
+        let components =
+            pattern[cmp::min(root_len, pattern.len())..].split_terminator(path::is_separator);
+
+        for component in components {
+            let compiled = try!(Pattern::new(component));
+            dir_patterns.push(compiled);
+        }
+
+        if root_len == pattern.len() {
+            dir_patterns.push(Pattern {
+                original: "".to_string(),
+                tokens: Vec::new(),
+                is_recursive: false,
+            });
+        }
+
+        let require_dir = pattern.chars().next_back().map(path::is_separator) == Some(true);
+        let todo = Vec::new();
+
+        Ok(Paths {
+            dir_patterns: dir_patterns,
+            require_dir: require_dir,
+            options: options.clone(),
+            todo: todo,
+            scope: Some(scope),
+        })
+    }
+
+    fn globPathR(&self, splittedPath: Vec<&str>) -> Result<Vec<Listing>, HdfsErr> {
+        Ok(vec![])
+    }
+
+    fn hdfsfileToFileInfo(file: &native::hdfsFileInfo) -> FileInfo {
+        FileInfo {
+            name: chars_to_str(file.mName).to_owned(),
+            kind: ObjectKind::fromtObjectKind(file.mKind),
+        }
+    }
+
+    pub fn listDirectory(&self, path: &str) -> Result<Listing, HdfsErr> {
         let mut count: c_int = 0;
 
         let array_ptr =
@@ -112,13 +200,15 @@ impl HDFileSystem {
 
         let vec: Vec<FileInfo> = list
             .iter()
-            .map(|file| FileInfo {
-                name: chars_to_str(file.mName).to_owned(),
-            })
+            .map(|file| HDFileSystem::hdfsfileToFileInfo(file))
             .collect();
 
-        unsafe { native::hdfsFreeFileInfo(array_ptr, count)};
-        return Ok(vec);
+        unsafe { native::hdfsFreeFileInfo(array_ptr, count) };
+        return Ok(Listing {
+            path: path.to_owned(),
+            kind: ObjectKind::Directory,
+            files: vec,
+        });
     }
 
     /**
@@ -144,15 +234,14 @@ impl HDFileSystem {
         flag.set(OFlag::O_APPEND, options.append);
         flag.set(OFlag::O_RDONLY, options.read);
 
-        let f =
-            unsafe { native::hdfsOpenFile(self.raw, str_to_chars(path), flag.bits(), 0, 0, 0) };
+        let f = unsafe { native::hdfsOpenFile(self.raw, str_to_chars(path), flag.bits(), 0, 0, 0) };
 
         if f.is_null() {
             Err(HdfsErr::get_last_error())
         } else {
             Ok(File {
                 fs: self.raw,
-                raw: f
+                raw: f,
             })
         }
     }
@@ -165,9 +254,9 @@ impl HDFileSystem {
         } else {
             let lastError = HdfsErr::get_last_hdfs_error();
             if let HdfsErr::NoError() = lastError {
-                return Ok(false)
+                return Ok(false);
             } else {
-                return Err(lastError)
+                return Err(lastError);
             }
         }
     }
@@ -176,7 +265,7 @@ impl HDFileSystem {
 impl Drop for HDFileSystem {
     fn drop(&mut self) {
         let res = unsafe { native::hdfsDisconnect(self.raw) };
-        if res !=0 {
+        if res != 0 {
             let lastError = HdfsErr::get_last_hdfs_error();
             warn!("{:?}", lastError)
         }
@@ -190,7 +279,14 @@ pub struct File {
 
 impl Read for File {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
-        let read_byte = unsafe {native::hdfsRead (self.fs, self.raw, buf.as_mut_ptr() as *mut c_void, buf.len() as i32)};
+        let read_byte = unsafe {
+            native::hdfsRead(
+                self.fs,
+                self.raw,
+                buf.as_mut_ptr() as *mut c_void,
+                buf.len() as i32,
+            )
+        };
         if read_byte >= 0 {
             Ok(read_byte as usize)
         } else {
@@ -202,7 +298,14 @@ impl Read for File {
 impl Write for File {
     fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
         let b = buf;
-        let write_byte = unsafe { native::hdfsWrite(self.fs, self.raw, b.as_ptr() as *const c_void, b.len() as i32) };
+        let write_byte = unsafe {
+            native::hdfsWrite(
+                self.fs,
+                self.raw,
+                b.as_ptr() as *const c_void,
+                b.len() as i32,
+            )
+        };
 
         if write_byte >= 0 {
             Ok(write_byte as usize)
@@ -212,7 +315,7 @@ impl Write for File {
     }
 
     fn flush(&mut self) -> Result<(), std::io::Error> {
-        let flush_byte = unsafe {native::hdfsFlush(self.fs, self.raw)};
+        let flush_byte = unsafe { native::hdfsFlush(self.fs, self.raw) };
         if flush_byte >= 0 {
             Ok(())
         } else {

@@ -1,0 +1,33 @@
+name: hdfs-cmd
+author: Charles R. <c.roussel@criteo.com>
+about: Hdfs Command line
+args:
+  - verbose:
+      short: v
+      multiple: true
+      help: Sets the level of verbosity
+
+  - config:
+      short: c
+      long: config
+      value_name: DIRECTORY
+      takes_value: true
+      help: Sets the hadoop config directory to use. (Default is using HADOOP_INSTALL/ env)
+
+  - gateway:
+      short: g
+      long: gateway
+      value_name: GATEWAY
+      takes_value: true
+      help: Sets the gateway to use. (Default is using fs.defaultFS or first value of dfs.nameservices from hadoop config)
+
+subcommands:
+  - ls:
+      about: List file on hdfs
+      args:
+        - debug:
+            short: d
+            help: Print debug information
+        - PATH:
+            required: true
+            help: The path that's used to list
