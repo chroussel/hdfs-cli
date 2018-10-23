@@ -4,7 +4,7 @@ use std::io;
 use util::chars_to_str;
 
 #[derive(Debug)]
-pub enum HdfsErr {
+pub enum Error {
     Unknown,
     FileNotFound(String),
     DirectoryNotFound(String),
@@ -18,30 +18,30 @@ pub enum HdfsErr {
     InvalidPattern(glob::PatternError),
 }
 
-impl From<io::Error> for HdfsErr {
-    fn from(err: io::Error) -> HdfsErr {
-        HdfsErr::Io(err)
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error {
+        Error::Io(err)
     }
 }
 
-impl From<glob::PatternError> for HdfsErr {
-    fn from(err: glob::PatternError) -> HdfsErr {
-        HdfsErr::InvalidPattern(err)
+impl From<glob::PatternError> for Error {
+    fn from(err: glob::PatternError) -> Error {
+        Error::InvalidPattern(err)
     }
 }
 
-impl HdfsErr {
-    pub fn get_last_error() -> HdfsErr {
+impl Error {
+    pub fn get_last_error() -> Error {
         let os_error = io::Error::last_os_error();
-        HdfsErr::Io(os_error)
+        Error::Io(os_error)
     }
 
-    pub fn get_last_hdfs_error() -> HdfsErr {
+    pub fn get_last_hdfs_error() -> Error {
         let hdfs_error_raw = chars_to_str(unsafe { native::hdfsGetLastError() });
         if hdfs_error_raw == "Success" {
-            HdfsErr::NoError()
+            Error::NoError()
         } else {
-            HdfsErr::HdfsError(hdfs_error_raw.to_owned())
+            Error::HdfsError(hdfs_error_raw.to_owned())
         }
     }
 }

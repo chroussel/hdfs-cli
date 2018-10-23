@@ -3,7 +3,9 @@ extern crate log;
 #[macro_use]
 extern crate clap;
 extern crate env_logger;
+extern crate glob;
 extern crate hdfs;
+
 use clap::{App, Arg, SubCommand};
 use std::env;
 use std::io::prelude::*;
@@ -17,7 +19,8 @@ fn main() {
 
     let yaml = load_yaml!("cli.yml");
     let matches = App::from_yaml(yaml).get_matches();
-
+    let pat = glob::Pattern::new("/user/recocomputer/*/*.cs").unwrap();
+    println!("{:?}", pat);
     let hadoop_install_path = env::var("HADOOP_INSTALL").unwrap_or(String::from(""));
     let config = matches
         .value_of("config")
@@ -29,7 +32,9 @@ fn main() {
         let path = matches.value_of("PATH").unwrap();
         let hdfs_fs = hdfs::hdfs::get_hdfs(Path::new(config), gateway, None).unwrap();
 
-        for file in hdfs_fs.ls(path).unwrap() {
+        let res = pat.matches("/user/recocomputer/blah");
+        println!("{:?}", res);
+        for file in hdfs_fs.list_directory(path).unwrap().files {
             println!("{}", file.name)
         }
     }

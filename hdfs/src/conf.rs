@@ -1,4 +1,4 @@
-use err::HdfsErr;
+use err::Error;
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use regex::Regex;
@@ -17,9 +17,9 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(directory: &Path) -> Result<Config, HdfsErr> {
+    pub fn new(directory: &Path) -> Result<Config, Error> {
         if !directory.exists() {
-            return Err(HdfsErr::DirectoryNotFound(String::from(
+            return Err(Error::DirectoryNotFound(String::from(
                 directory.to_str().unwrap_or_default(),
             )));
         }

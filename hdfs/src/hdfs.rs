@@ -1,7 +1,6 @@
 #![allow(unused_imports)]
 use conf;
-use err::HdfsErr;
-use glob::Pattern;
+use err::Error;
 use libc::{
     c_char, c_int, c_short, c_uchar, c_void, int16_t, int32_t, int64_t, size_t, time_t, uint16_t,
 };
@@ -9,7 +8,7 @@ use native;
 use nix::fcntl::OFlag;
 use std::cmp;
 use std::fmt;
-use std::io::Error;
+use std::io;
 use std::io::Read;
 use std::io::Write;
 use std::mem;
@@ -30,17 +29,17 @@ pub fn get_hdfs(
     config_path: &Path,
     host: Option<&str>,
     effective_user: Option<&str>,
-) -> Result<HDFileSystem, HdfsErr> {
+) -> Result<HDFileSystem, Error> {
     let config = conf::Config::new(config_path)?;
 
     let namenode = match host.or(config.get_string(HOST_STRING)) {
         Some(name) => Ok(name),
-        None => Err(HdfsErr::MissingConfig(String::from("host config missing"))),
+        None => Err(Error::MissingConfig(String::from("host config missing"))),
     }?;
 
     let builder = unsafe { native::hdfsNewBuilder() };
     if builder.is_null() {
-        return Err(HdfsErr::ErrorCreatingBuilder);
+        return Err(Error::ErrorCreatingBuilder);
     }
 
     info!("Set namenode to {}", namenode);
@@ -82,21 +81,21 @@ pub fn get_hdfs(
 
     if hdfs.is_null() {
         info!("There was a connection error");
-        Err(HdfsErr::get_last_error())
+        Err(Error::get_last_error())
     } else {
         Ok(HDFileSystem { raw: hdfs })
     }
 }
 
-enum ObjectKind {
+pub enum ObjectKind {
     Unknown,
     File,
     Directory,
 }
 
 impl ObjectKind {
-    fn fromtObjectKind(tObjectKind: native::tObjectKind) -> ObjectKind {
-        match tObjectKind {
+    fn from_t_object_kind(kind: &native::tObjectKind) -> ObjectKind {
+        match kind {
             native::tObjectKind::kObjectKindFile => ObjectKind::File,
             native::tObjectKind::kObjectKindDirectory => ObjectKind::Directory,
             _ => ObjectKind::Unknown,
@@ -116,82 +115,21 @@ pub struct Listing {
 }
 
 impl HDFileSystem {
-    pub fn globPath(&self, pattern: &str) -> Result<Vec<Listing>, HdfsErr> {
-        let _pattern = Pattern::new(pattern)?;
-
-        let components = Path::new(pattern).components().peekable();
-
-        loop {
-            match components.peek() {
-                Some(&Component::RootDir) => {
-                    components.next();
-                }
-                _ => {
-                    break;
-                }
-            }
-        }
-
-        let rest = components.map(|s| s.as_os_str()).collect::<PathBuf>();
-        let normalized_pattern = Path::new(pattern).iter().collect::<PathBuf>();
-        let root_len = normalized_pattern.to_str().unwrap().len() - rest.to_str().unwrap().len();
-        let root = if root_len > 0 {
-            Some(Path::new(&pattern[..root_len]))
-        } else {
-            None
-        };
-
-        let scope = root
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| PathBuf::from("."));
-        let mut dir_patterns = Vec::new();
-        let components =
-            pattern[cmp::min(root_len, pattern.len())..].split_terminator(path::is_separator);
-
-        for component in components {
-            let compiled = try!(Pattern::new(component));
-            dir_patterns.push(compiled);
-        }
-
-        if root_len == pattern.len() {
-            dir_patterns.push(Pattern {
-                original: "".to_string(),
-                tokens: Vec::new(),
-                is_recursive: false,
-            });
-        }
-
-        let require_dir = pattern.chars().next_back().map(path::is_separator) == Some(true);
-        let todo = Vec::new();
-
-        Ok(Paths {
-            dir_patterns: dir_patterns,
-            require_dir: require_dir,
-            options: options.clone(),
-            todo: todo,
-            scope: Some(scope),
-        })
-    }
-
-    fn globPathR(&self, splittedPath: Vec<&str>) -> Result<Vec<Listing>, HdfsErr> {
-        Ok(vec![])
-    }
-
-    fn hdfsfileToFileInfo(file: &native::hdfsFileInfo) -> FileInfo {
+    fn hdfsfile_to_file_info(file: &native::hdfsFileInfo) -> FileInfo {
         FileInfo {
             name: chars_to_str(file.mName).to_owned(),
-            kind: ObjectKind::fromtObjectKind(file.mKind),
+            kind: ObjectKind::from_t_object_kind(&file.mKind),
         }
     }
 
-    pub fn listDirectory(&self, path: &str) -> Result<Listing, HdfsErr> {
+    pub fn list_directory(&self, path: &str) -> Result<Listing, Error> {
         let mut count: c_int = 0;
 
         let array_ptr =
             unsafe { native::hdfsListDirectory(self.raw, str_to_chars(path), &mut count) };
 
         if array_ptr.is_null() {
-            return Err(HdfsErr::Unknown);
+            return Err(Error::Unknown);
         }
 
         let list = unsafe {
@@ -200,7 +138,7 @@ impl HDFileSystem {
 
         let vec: Vec<FileInfo> = list
             .iter()
-            .map(|file| HDFileSystem::hdfsfileToFileInfo(file))
+            .map(|file| HDFileSystem::hdfsfile_to_file_info(file))
             .collect();
 
         unsafe { native::hdfsFreeFileInfo(array_ptr, count) };
@@ -226,7 +164,7 @@ impl HDFileSystem {
      * @return Returns the handle to the open file or NULL on error.
      */
 
-    pub fn open_with_options(&self, path: &str, options: &OpenOptions) -> Result<File, HdfsErr> {
+    pub fn open_with_options(&self, path: &str, options: &OpenOptions) -> Result<File, Error> {
         let mut flag = OFlag::empty();
 
         flag.set(OFlag::O_CREAT, options.create);
@@ -237,7 +175,7 @@ impl HDFileSystem {
         let f = unsafe { native::hdfsOpenFile(self.raw, str_to_chars(path), flag.bits(), 0, 0, 0) };
 
         if f.is_null() {
-            Err(HdfsErr::get_last_error())
+            Err(Error::get_last_error())
         } else {
             Ok(File {
                 fs: self.raw,
@@ -246,17 +184,17 @@ impl HDFileSystem {
         }
     }
 
-    pub fn exists(&self, path: &str) -> Result<bool, HdfsErr> {
+    pub fn exists(&self, path: &str) -> Result<bool, Error> {
         let res = unsafe { native::hdfsExists(self.raw, str_to_chars(path)) };
 
         if res == 0 {
             Ok(true)
         } else {
-            let lastError = HdfsErr::get_last_hdfs_error();
-            if let HdfsErr::NoError() = lastError {
+            let last_error = Error::get_last_hdfs_error();
+            if let Error::NoError() = last_error {
                 return Ok(false);
             } else {
-                return Err(lastError);
+                return Err(last_error);
             }
         }
     }
@@ -266,8 +204,8 @@ impl Drop for HDFileSystem {
     fn drop(&mut self) {
         let res = unsafe { native::hdfsDisconnect(self.raw) };
         if res != 0 {
-            let lastError = HdfsErr::get_last_hdfs_error();
-            warn!("{:?}", lastError)
+            let last_error = Error::get_last_hdfs_error();
+            warn!("{:?}", last_error)
         }
     }
 }
@@ -290,7 +228,7 @@ impl Read for File {
         if read_byte >= 0 {
             Ok(read_byte as usize)
         } else {
-            Err(Error::last_os_error())
+            Err(io::Error::last_os_error())
         }
     }
 }
@@ -310,7 +248,7 @@ impl Write for File {
         if write_byte >= 0 {
             Ok(write_byte as usize)
         } else {
-            Err(Error::last_os_error())
+            Err(io::Error::last_os_error())
         }
     }
 
@@ -319,7 +257,7 @@ impl Write for File {
         if flush_byte >= 0 {
             Ok(())
         } else {
-            Err(Error::last_os_error())
+            Err(io::Error::last_os_error())
         }
     }
 }
@@ -388,11 +326,11 @@ impl OpenOptions {
         self
     }
 
-    pub fn open<P: AsRef<Path>>(&self, fs: &HDFileSystem, path: P) -> Result<File, HdfsErr> {
+    pub fn open<P: AsRef<Path>>(&self, fs: &HDFileSystem, path: P) -> Result<File, Error> {
         let path = path.as_ref();
-        let pathStr = path.to_str().ok_or(HdfsErr::PathConversionError(
+        let path_str = path.to_str().ok_or(Error::PathConversionError(
             path.to_string_lossy().into_owned(),
         ))?;
-        fs.open_with_options(pathStr, self)
+        fs.open_with_options(path_str, self)
     }
 }
