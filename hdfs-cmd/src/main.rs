@@ -31,7 +31,7 @@ fn ls(configPath: PathBuf, gateway: Option<&str>, path: PathBuf) {
         .with_path(path)
         .build()
         .unwrap();
-    println!("{:?}", walk);
+
     for file in walk {
         let path = file.unwrap();
         let path_str = path.to_str().unwrap();
@@ -76,7 +76,6 @@ fn main() {
     let matches = App::from_yaml(yaml).get_matches();
     let hadoop_install_path = env::var("HADOOP_INSTALL").map(|e| Some(e)).unwrap_or(None);
     let hadoop_default_gateway = env::var("GATEWAY_DEFAULT").map(|e| Some(e)).unwrap_or(None);
-    println!("{:?}", home_config);
     let config = matches
         .value_of("config")
         .or(home_config

@@ -18,6 +18,7 @@ pub trait MetadataTrait {
 }
 pub trait DirEntryTrait {
     fn path(&self) -> PathBuf;
+    fn is_dir(&self) -> bool;
 }
 
 pub struct ReadDirWrapper(fs::ReadDir);
@@ -43,6 +44,10 @@ impl MetadataTrait for MetadataWrapper {
 impl DirEntryTrait for DirEntryWrapper {
     fn path(&self) -> PathBuf {
         self.0.path()
+    }
+
+    fn is_dir(&self) -> bool {
+        self.0.path().is_dir()
     }
 }
 
@@ -257,7 +262,7 @@ impl<T: FileSystem> Iterator for Walk<T> {
                         let entry = try_opt_res!(entry);
                         let path = entry.path();
 
-                        if self.fs.is_dir(&path)
+                        if entry.is_dir()
                             && self.max_depth.map(|md| md > depth + 1).unwrap_or(false)
                         {
                             self.path_stack.push((depth + 1, path))

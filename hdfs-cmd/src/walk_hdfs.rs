@@ -32,6 +32,10 @@ impl DirEntryTrait for DirEntryWrapper {
     fn path(&self) -> PathBuf {
         self.0.path()
     }
+
+    fn is_dir(&self) -> bool {
+        self.0.is_dir()
+    }
 }
 
 impl FileSystem for HdfsFileSystem {
