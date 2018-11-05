@@ -25,12 +25,12 @@ pub struct HDFileSystem {
     raw: *const native::hdfsFS,
 }
 
-pub fn get_hdfs(
-    config_path: &Path,
+pub fn get_hdfs<P: AsRef<Path>>(
+    config_path: P,
     host: Option<&str>,
     effective_user: Option<&str>,
 ) -> Result<HDFileSystem, Error> {
-    let config = conf::Config::new(config_path)?;
+    let config = conf::Config::new(config_path.as_ref())?;
 
     let namenode = match host.or(config.get_string(HOST_STRING)) {
         Some(name) => Ok(name),
@@ -87,6 +87,7 @@ pub fn get_hdfs(
     }
 }
 
+#[derive(PartialEq)]
 pub enum ObjectKind {
     Unknown,
     File,
@@ -103,31 +104,93 @@ impl ObjectKind {
     }
 }
 
-pub struct FileInfo {
-    pub name: String,
-    pub kind: ObjectKind,
+pub struct DirEntry {
+    path: PathBuf,
+    kind: ObjectKind,
 }
 
-pub struct Listing {
-    pub path: String,
+impl DirEntry {
+    pub fn is_dir(&self) -> bool {
+        self.kind == ObjectKind::Directory
+    }
+
+    pub fn is_file(&self) -> bool {
+        self.kind == ObjectKind::File
+    }
+
+    pub fn path(&self) -> PathBuf {
+        self.path.to_owned()
+    }
+}
+
+pub struct ReadDir {
+    pub path: PathBuf,
     pub kind: ObjectKind,
-    pub files: Vec<FileInfo>,
+    pub files: Vec<DirEntry>,
+}
+
+impl Iterator for ReadDir {
+    type Item = DirEntry;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.files.pop()
+    }
 }
 
 impl HDFileSystem {
-    fn hdfsfile_to_file_info(file: &native::hdfsFileInfo) -> FileInfo {
-        FileInfo {
-            name: chars_to_str(file.mName).to_owned(),
+    fn hdfsfile_to_file_info(file: &native::hdfsFileInfo) -> DirEntry {
+        DirEntry {
+            path: PathBuf::from(chars_to_str(file.mName)),
             kind: ObjectKind::from_t_object_kind(&file.mKind),
         }
     }
 
-    pub fn list_directory(&self, path: &str) -> Result<Listing, Error> {
+    pub fn path_info(&self, path: &PathBuf) -> Result<DirEntry, Error> {
+        let path_str = path.to_str();
+        if path_str.is_none() {
+            return Err(Error::InvalidPath(path.to_owned()));
+        }
+
+        let path_str = path_str.unwrap();
+
+        let array_ptr = unsafe { native::hdfsGetPathInfo(self.raw, str_to_chars(path_str)) };
+
+        let mut vec = HDFileSystem::convert_file_info_to_vec(array_ptr, 1)?;
+        let file = vec.pop();
+
+        if file.is_none() {
+            return Err(Error::Unknown);
+        }
+
+        let file = file.unwrap();
+        Ok(file)
+    }
+
+    pub fn list_directory(&self, path: &PathBuf) -> Result<ReadDir, Error> {
         let mut count: c_int = 0;
+        let path_str = path.to_str();
+        if path_str.is_none() {
+            return Err(Error::InvalidPath(path.to_owned()));
+        }
+
+        let path_str = path_str.unwrap();
 
         let array_ptr =
-            unsafe { native::hdfsListDirectory(self.raw, str_to_chars(path), &mut count) };
+            unsafe { native::hdfsListDirectory(self.raw, str_to_chars(path_str), &mut count) };
 
+        let vec = HDFileSystem::convert_file_info_to_vec(array_ptr, count)?;
+
+        return Ok(ReadDir {
+            path: path.to_owned(),
+            kind: ObjectKind::Directory,
+            files: vec,
+        });
+    }
+
+    fn convert_file_info_to_vec(
+        array_ptr: *const native::hdfsFileInfo,
+        count: i32,
+    ) -> Result<Vec<DirEntry>, Error> {
         if array_ptr.is_null() {
             return Err(Error::Unknown);
         }
@@ -136,33 +199,14 @@ impl HDFileSystem {
             slice::from_raw_parts(array_ptr as *const native::hdfsFileInfo, count as usize)
         };
 
-        let vec: Vec<FileInfo> = list
+        let vec: Vec<DirEntry> = list
             .iter()
             .map(|file| HDFileSystem::hdfsfile_to_file_info(file))
             .collect();
 
         unsafe { native::hdfsFreeFileInfo(array_ptr, count) };
-        return Ok(Listing {
-            path: path.to_owned(),
-            kind: ObjectKind::Directory,
-            files: vec,
-        });
+        Ok(vec)
     }
-
-    /**
-     * hdfsOpenFile - Open a hdfs file in given mode.
-     * @param fs The configured filesystem handle.
-     * @param path The full path to the file.
-     * @param flags - an | of bits/fcntl.h file flags - supported flags are O_RDONLY, O_WRONLY (meaning create or overwrite i.e., implies O_TRUNCAT),
-     * O_WRONLY|O_APPEND and O_SYNC. Other flags are generally ignored other than (O_RDWR || (O_EXCL & O_CREAT)) which return NULL and set errno equal ENOTSUP.
-     * @param bufferSize Size of buffer for read/write - pass 0 if you want
-     * to use the default configured values.
-     * @param replication Block replication - pass 0 if you want to use
-     * the default configured values.
-     * @param blocksize Size of block - pass 0 if you want to use the
-     * default configured values.
-     * @return Returns the handle to the open file or NULL on error.
-     */
 
     pub fn open_with_options(&self, path: &str, options: &OpenOptions) -> Result<File, Error> {
         let mut flag = OFlag::empty();

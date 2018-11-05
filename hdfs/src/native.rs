@@ -120,8 +120,19 @@ extern "C" {
 
     pub fn hdfsFlush(fs: *const hdfsFS, file: *const hdfsFile) -> c_int;
 
-    pub fn hdfsCopy(srcFS: *const hdfsFS , src: *const c_char, dstFS: *const hdfsFS, dst: *const c_char);
-    pub fn hdfsMove(srcFS: *const hdfsFS , src: *const c_char, dstFS: *const hdfsFS, dst: *const c_char);
-    pub fn hdfsRename(srcFS: *const hdfsFS , src: *const c_char, dst: *const c_char);
+    pub fn hdfsCopy(
+        srcFS: *const hdfsFS,
+        src: *const c_char,
+        dstFS: *const hdfsFS,
+        dst: *const c_char,
+    );
+    pub fn hdfsMove(
+        srcFS: *const hdfsFS,
+        src: *const c_char,
+        dstFS: *const hdfsFS,
+        dst: *const c_char,
+    );
+    pub fn hdfsRename(srcFS: *const hdfsFS, src: *const c_char, dst: *const c_char);
     pub fn hdfsCreateDirectory(fs: *const hdfsFS, path: *const c_char) -> c_int;
+    pub fn hdfsGetPathInfo(fs: *const hdfsFS, path: *const c_char) -> *const hdfsFileInfo;
 }

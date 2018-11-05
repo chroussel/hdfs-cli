@@ -13,6 +13,22 @@ impl PathFilter for TestFilter {
     }
 }
 
+pub struct StartFilter {
+    pattern: String,
+}
+
+impl PathFilter for StartFilter {
+    fn is_match(&self, path: &str) -> bool {
+        path.starts_with(self.pattern.as_str())
+    }
+}
+
+impl StartFilter {
+    pub fn new(pattern: String) -> StartFilter {
+        StartFilter { pattern: pattern }
+    }
+}
+
 pub struct GlobFilter {
     pattern: glob::Pattern,
 }

@@ -1,6 +1,6 @@
-use glob;
 use native;
 use std::io;
+use std::path::PathBuf;
 use util::chars_to_str;
 
 #[derive(Debug)]
@@ -15,18 +15,12 @@ pub enum Error {
     ErrorCreatingBuilder,
     PathConversionError(String),
     NoError(),
-    InvalidPattern(glob::PatternError),
+    InvalidPath(PathBuf),
 }
 
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Error {
         Error::Io(err)
-    }
-}
-
-impl From<glob::PatternError> for Error {
-    fn from(err: glob::PatternError) -> Error {
-        Error::InvalidPattern(err)
     }
 }
 

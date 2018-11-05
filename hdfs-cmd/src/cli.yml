@@ -31,3 +31,20 @@ subcommands:
         - PATH:
             required: true
             help: The path that's used to list
+  - config:
+      about: Configuration helpers
+      subcommands:
+        - set:
+            about: Set a config
+            args:
+              - KEY:
+                  required: true
+              - VALUE:
+                  required: true
+        - list:
+            about: List Configs
+        - remaove:
+            about: Remove config
+            args:
+              - KEY:
+                  required: true

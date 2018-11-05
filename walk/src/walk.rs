@@ -1,7 +1,5 @@
-use err::Error;
+use err;
 use filter::*;
-use std::collections::VecDeque;
-use std::ffi;
 use std::fmt;
 use std::fs::{self, read_dir};
 use std::path::{Path, PathBuf};
@@ -10,7 +8,7 @@ macro_rules! try_opt_res {
     ($e: expr) => {
         match $e {
             Ok(v) => v,
-            Err(v) => return Some(Err(Error::from(v))),
+            Err(v) => return Some(Err(v)),
         }
     };
 }
@@ -27,12 +25,12 @@ pub struct MetadataWrapper(fs::Metadata);
 pub struct DirEntryWrapper(fs::DirEntry);
 
 impl Iterator for ReadDirWrapper {
-    type Item = Result<DirEntryWrapper, Error>;
+    type Item = Result<DirEntryWrapper, err::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0
             .next()
-            .map(|r| r.map(|r2| DirEntryWrapper(r2)).map_err(Error::from))
+            .map(|r| r.map(|r2| DirEntryWrapper(r2)).map_err(err::Error::from))
     }
 }
 
@@ -49,30 +47,32 @@ impl DirEntryTrait for DirEntryWrapper {
 }
 
 pub trait FileSystem {
+    type Error: From<err::Error>;
     type DirEntry: DirEntryTrait;
-    type ReadDir: Iterator<Item = Result<Self::DirEntry, Error>>;
+    type ReadDir: Iterator<Item = Result<Self::DirEntry, Self::Error>>;
     type Metadata: MetadataTrait;
 
     fn is_dir(&self, path: &PathBuf) -> bool {
         self.metadata(path).map(|a| a.is_dir()).unwrap_or(false)
     }
 
-    fn read_dir(&self, path: &PathBuf) -> Result<Self::ReadDir, Error>;
-    fn metadata(&self, path: &PathBuf) -> Result<Self::Metadata, Error>;
+    fn read_dir(&self, path: &PathBuf) -> Result<Self::ReadDir, Self::Error>;
+    fn metadata(&self, path: &PathBuf) -> Result<Self::Metadata, Self::Error>;
 }
 
 pub struct LinuxFS {}
 
 impl FileSystem for LinuxFS {
+    type Error = err::Error;
     type DirEntry = DirEntryWrapper;
     type ReadDir = ReadDirWrapper;
     type Metadata = MetadataWrapper;
 
-    fn read_dir(&self, path: &PathBuf) -> Result<Self::ReadDir, Error> {
+    fn read_dir(&self, path: &PathBuf) -> Result<Self::ReadDir, Self::Error> {
         Ok(ReadDirWrapper(read_dir(path)?))
     }
 
-    fn metadata(&self, path: &PathBuf) -> Result<Self::Metadata, Error> {
+    fn metadata(&self, path: &PathBuf) -> Result<Self::Metadata, Self::Error> {
         Ok(MetadataWrapper(fs::metadata(path)?))
     }
 }
@@ -92,8 +92,8 @@ impl<'a, T: FileSystem> WalkBuilder<T> {
         }
     }
 
-    pub fn build(self) -> Result<Walk<T>, Error> {
-        let path = self.path.ok_or(Error::NoPathDefined)?;
+    pub fn build(self) -> Result<Walk<T>, err::Error> {
+        let path = self.path.ok_or(err::Error::NoPathDefined)?;
         Walk::new(self.fs, path, self.filters)
     }
 
@@ -137,17 +137,25 @@ impl<T: FileSystem> fmt::Debug for Walk<T> {
 }
 
 impl<T: FileSystem> Walk<T> {
-    pub fn new(fs: T, path: PathBuf, filters: Vec<Box<dyn PathFilter>>) -> Result<Walk<T>, Error> {
+    pub fn new(
+        fs: T,
+        path: PathBuf,
+        filters: Vec<Box<dyn PathFilter>>,
+    ) -> Result<Walk<T>, err::Error> {
         let mut filter_mut = filters;
-        let path_str = path.to_str().ok_or(Error::PathFormatError)?;
+        let path_str = path.to_str().ok_or(err::Error::PathFormatError)?;
         if path_str.contains('*') || path_str.contains('?') {
             let glob_filter = GlobFilter::new(path_str)?;
             filter_mut.push(Box::new(glob_filter));
         }
 
-        let root_path = pattern_root(path_str);
+        let root_path = path_root(path_str);
         let max_depth;
 
+        let pattern_root = pattern_root(path_str);
+
+        let filter = StartFilter::new(pattern_root);
+        filter_mut.push(Box::new(filter));
         if path_str.contains("**") {
             max_depth = None;
         } else {
@@ -163,8 +171,6 @@ impl<T: FileSystem> Walk<T> {
         } else {
             dir_entries.push(root_path)
         }
-        println!("{:?}", max_depth);
-
         Ok(Walk {
             path_stack: Box::new(path_stack),
             dir_entries_stack: Box::new(dir_entries),
@@ -174,7 +180,7 @@ impl<T: FileSystem> Walk<T> {
         })
     }
 
-    fn next_file_entry(&mut self) -> Option<Result<PathBuf, Error>> {
+    fn next_file_entry(&mut self) -> Option<Result<PathBuf, T::Error>> {
         while let Some(entry) = self.dir_entries_stack.pop() {
             let pass = self
                 .filters
@@ -188,7 +194,7 @@ impl<T: FileSystem> Walk<T> {
         return None;
     }
 
-    fn next_dir_entry(&mut self) -> Option<Result<(usize, PathBuf), Error>> {
+    fn next_dir_entry(&mut self) -> Option<Result<(usize, PathBuf), T::Error>> {
         while let Some((depth, next_path)) = self.path_stack.pop() {
             if let Some(md) = self.max_depth {
                 if depth > md {
@@ -202,7 +208,7 @@ impl<T: FileSystem> Walk<T> {
     }
 }
 
-fn pattern_root(path: &str) -> PathBuf {
+fn path_root(path: &str) -> PathBuf {
     let mut s = PathBuf::new();
     let mut slice = String::new();
     for token in path.chars() {
@@ -219,8 +225,19 @@ fn pattern_root(path: &str) -> PathBuf {
     return s;
 }
 
+fn pattern_root(path: &str) -> String {
+    let mut s = String::new();
+    for token in path.chars() {
+        match token {
+            '*' | '?' | '[' => break,
+            _ => s.push(token),
+        }
+    }
+    return s;
+}
+
 impl<T: FileSystem> Iterator for Walk<T> {
-    type Item = Result<PathBuf, Error>;
+    type Item = Result<PathBuf, T::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -240,7 +257,9 @@ impl<T: FileSystem> Iterator for Walk<T> {
                         let entry = try_opt_res!(entry);
                         let path = entry.path();
 
-                        if self.fs.is_dir(&path) {
+                        if self.fs.is_dir(&path)
+                            && self.max_depth.map(|md| md > depth + 1).unwrap_or(false)
+                        {
                             self.path_stack.push((depth + 1, path))
                         } else {
                             self.dir_entries_stack.push(path)
