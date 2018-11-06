@@ -31,20 +31,21 @@ subcommands:
         - PATH:
             required: true
             help: The path that's used to list
-  - config:
-      about: Configuration helpers
+  - cat:
+      about: Read a file as text on hdfs
+      args:
+        - PATH:
+            required: true
+            help: Path of the file to read
+  - gateway:
       subcommands:
-        - set:
-            about: Set a config
+        - switch:
+            about: Temporary switch gateway for the current env
             args:
-              - KEY:
+              - switch_gateway:
                   required: true
-              - VALUE:
-                  required: true
+                  help: The gateway name to use (should match the one inside config)
         - list:
-            about: List Configs
-        - remaove:
-            about: Remove config
-            args:
-              - KEY:
-                  required: true
+            about: List gateway available in hadoop config
+        - current:
+            about: Display current gateway

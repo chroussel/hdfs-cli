@@ -19,13 +19,15 @@ mod walk_hdfs;
 use clap::{App, Arg, SubCommand};
 use std::env;
 use std::fs;
+use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
-fn ls(configPath: PathBuf, gateway: Option<&str>, path: PathBuf) {
-    let hdfs_fs = hdfs::hdfs::get_hdfs(configPath, gateway, None).unwrap();
+fn ls(config_path: PathBuf, gateway: Option<&str>, path: PathBuf) {
+    let hdfs_fs = hdfs::hdfs::get_hdfs(config_path, gateway, None).unwrap();
 
     let walk = walk::walk::WalkBuilder::new(walk_hdfs::HdfsFileSystem::new(hdfs_fs))
         .with_path(path)
@@ -39,7 +41,42 @@ fn ls(configPath: PathBuf, gateway: Option<&str>, path: PathBuf) {
     }
 }
 
+fn text(config_path: PathBuf, gateway: Option<&str>, path: PathBuf) {
+    let hdfs_fs = hdfs::hdfs::get_hdfs(config_path, gateway, None).unwrap();
+
+    if hdfs_fs.exists(&path).unwrap() {
+        let mut content = String::new();
+        let mut f = hdfs::hdfs::OpenOptions::new()
+            .read(true)
+            .open(&hdfs_fs, path)
+            .unwrap();
+        f.read_to_string(&mut content).unwrap();
+        println!("{}", content)
+    } else {
+        println!("File {} not found", path.display())
+    }
+}
+
 const DEFAULT_PATH_STR: &str = ".hdfsrc";
+
+fn write_config(config: config::Config) -> Result<(), err::Error> {
+    let home = dirs::home_dir();
+
+    if home.is_none() {
+        return Err(err::Error::NoHome);
+    }
+    let mut home = home.unwrap();
+    home.push(DEFAULT_PATH_STR);
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .create(true)
+        .open(home)?;
+
+    file.write_all(toml::to_string(&config)?.as_bytes())?;
+    Ok(())
+}
 
 fn home_config() -> Option<config::Config> {
     let home = dirs::home_dir();
@@ -100,6 +137,35 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("ls") {
         let path = matches.value_of("PATH").unwrap();
         let path = PathBuf::from(path);
-        ls(config, gateway, path)
+        ls(config, gateway, path);
+    } else if let Some(matches) = matches.subcommand_matches("cat") {
+        let path = matches.value_of("PATH").unwrap();
+        let path = PathBuf::from(path);
+        text(config, gateway, path);
+    } else if let Some(matches) = matches.subcommand_matches("gateway") {
+        if let Some(matches) = matches.subcommand_matches("list") {
+            for g in hdfs::hdfs::list_gateway(config).unwrap() {
+                println!("{}", g)
+            }
+        } else if let Some(matches) = matches.subcommand_matches("switch") {
+            let gateway = matches.value_of("switch_gateway").unwrap();
+
+            let gateways = hdfs::hdfs::list_gateway(config).unwrap();
+            if !gateways.contains(&gateway.to_owned()) {
+                println!(
+                    "No gateway with name \"{}\" found in hadoop config",
+                    gateway
+                );
+                return;
+            }
+
+            let mut home_config = home_config.clone().unwrap_or(config::Config::default());
+            let mut gateway_config = config::Gateway::default();
+            gateway_config.default = Some(gateway.to_owned());
+            home_config.gateway = Some(gateway_config);
+            write_config(home_config).unwrap();
+        } else if let Some(matches) = matches.subcommand_matches("current") {
+            println!("Current gateway: {}", gateway.unwrap_or("None"))
+        }
     }
 }

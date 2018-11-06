@@ -1,15 +1,15 @@
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, Default)]
 pub struct Config {
     pub hadoop: Option<Hadoop>,
     pub gateway: Option<Gateway>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, Default)]
 pub struct Hadoop {
     pub config_path: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, Default)]
 pub struct Gateway {
     pub default: Option<String>,
 }
