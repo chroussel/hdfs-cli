@@ -1,5 +1,4 @@
 use err::Error;
-use std::ffi::OsStr;
 
 pub trait PathFilter {
     fn is_match(&self, path: &str) -> bool;
@@ -9,7 +8,7 @@ pub struct TestFilter {}
 
 impl PathFilter for TestFilter {
     fn is_match(&self, path: &str) -> bool {
-        return path.ends_with(".h");
+        path.ends_with(".h")
     }
 }
 
@@ -25,7 +24,7 @@ impl PathFilter for StartFilter {
 
 impl StartFilter {
     pub fn new(pattern: String) -> StartFilter {
-        StartFilter { pattern: pattern }
+        StartFilter { pattern }
     }
 }
 
@@ -35,9 +34,9 @@ pub struct GlobFilter {
 
 impl GlobFilter {
     pub fn new(path: &str) -> Result<GlobFilter, Error> {
-        return Ok(GlobFilter {
+        Ok(GlobFilter {
             pattern: glob::Pattern::new(path)?,
-        });
+        })
     }
 }
 
@@ -48,6 +47,6 @@ impl PathFilter for GlobFilter {
             case_sensitive: true,
             require_literal_leading_dot: false,
         };
-        return self.pattern.matches_with(path, &options);
+        self.pattern.matches_with(path, &options)
     }
 }

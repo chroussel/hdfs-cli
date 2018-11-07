@@ -1,5 +1,5 @@
 #![allow(unused_imports)]
-use conf;
+use config;
 use err::Error;
 use libc::{
     c_char, c_int, c_short, c_uchar, c_void, int16_t, int32_t, int64_t, size_t, time_t, uint16_t,
@@ -18,11 +18,22 @@ use std::rc::Rc;
 use std::slice;
 use util::*;
 
-const HOST_STRING: &'static str = "host";
-const HOST_PORT: &'static str = "port";
+const HOST_STRING: &str = "host";
+const HOST_PORT: &str = "port";
+const GATEWAYS: &str = "dfs.nameservices";
 
 pub struct HDFileSystem {
     raw: *const native::hdfsFS,
+}
+
+pub fn list_gateway<P: AsRef<Path>>(config_path: P) -> Result<Vec<String>, Error> {
+    let config = config::Config::new(config_path.as_ref())?;
+
+    if let Some(gateways) = config.get_string(GATEWAYS) {
+        Ok(gateways.split(",").map(|s| s.to_owned()).collect())
+    } else {
+        return Ok(vec![]);
+    }
 }
 
 pub fn get_hdfs<P: AsRef<Path>>(
@@ -30,7 +41,7 @@ pub fn get_hdfs<P: AsRef<Path>>(
     host: Option<&str>,
     effective_user: Option<&str>,
 ) -> Result<HDFileSystem, Error> {
-    let config = conf::Config::new(config_path.as_ref())?;
+    let config = config::Config::new(config_path.as_ref())?;
 
     let namenode = match host.or(config.get_string(HOST_STRING)) {
         Some(name) => Ok(name),
@@ -99,7 +110,6 @@ impl ObjectKind {
         match kind {
             native::tObjectKind::kObjectKindFile => ObjectKind::File,
             native::tObjectKind::kObjectKindDirectory => ObjectKind::Directory,
-            _ => ObjectKind::Unknown,
         }
     }
 }
@@ -180,11 +190,11 @@ impl HDFileSystem {
 
         let vec = HDFileSystem::convert_file_info_to_vec(array_ptr, count)?;
 
-        return Ok(ReadDir {
+        Ok(ReadDir {
             path: path.to_owned(),
             kind: ObjectKind::Directory,
             files: vec,
-        });
+        })
     }
 
     fn convert_file_info_to_vec(
@@ -208,15 +218,23 @@ impl HDFileSystem {
         Ok(vec)
     }
 
-    pub fn open_with_options(&self, path: &str, options: &OpenOptions) -> Result<File, Error> {
+    pub fn open_with_options<P: AsRef<Path>>(
+        &self,
+        path: P,
+        options: &OpenOptions,
+    ) -> Result<File, Error> {
         let mut flag = OFlag::empty();
 
         flag.set(OFlag::O_CREAT, options.create);
         flag.set(OFlag::O_WRONLY, options.write);
         flag.set(OFlag::O_APPEND, options.append);
         flag.set(OFlag::O_RDONLY, options.read);
-
-        let f = unsafe { native::hdfsOpenFile(self.raw, str_to_chars(path), flag.bits(), 0, 0, 0) };
+        let path = path.as_ref();
+        let path_str = path.to_str().ok_or(Error::PathConversionError(
+            path.to_string_lossy().into_owned(),
+        ))?;
+        let f =
+            unsafe { native::hdfsOpenFile(self.raw, str_to_chars(path_str), flag.bits(), 0, 0, 0) };
 
         if f.is_null() {
             Err(Error::get_last_error())
@@ -228,8 +246,13 @@ impl HDFileSystem {
         }
     }
 
-    pub fn exists(&self, path: &str) -> Result<bool, Error> {
-        let res = unsafe { native::hdfsExists(self.raw, str_to_chars(path)) };
+    pub fn exists<P: AsRef<Path>>(&self, path: P) -> Result<bool, Error> {
+        let path_str = path.as_ref().to_str();
+        if path_str.is_none() {
+            return Err(Error::InvalidPath(path.as_ref().to_owned()));
+        }
+        let path_str = path_str.unwrap();
+        let res = unsafe { native::hdfsExists(self.raw, str_to_chars(path_str)) };
 
         if res == 0 {
             Ok(true)
@@ -371,10 +394,6 @@ impl OpenOptions {
     }
 
     pub fn open<P: AsRef<Path>>(&self, fs: &HDFileSystem, path: P) -> Result<File, Error> {
-        let path = path.as_ref();
-        let path_str = path.to_str().ok_or(Error::PathConversionError(
-            path.to_string_lossy().into_owned(),
-        ))?;
-        fs.open_with_options(path_str, self)
+        fs.open_with_options(path, self)
     }
 }

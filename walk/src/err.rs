@@ -9,18 +9,18 @@ pub enum Error {
 
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
-        return Error::IoError(err);
+        Error::IoError(err)
     }
 }
 
 impl From<std::ffi::OsString> for Error {
     fn from(err: std::ffi::OsString) -> Self {
-        return Error::PathConversionError(err);
+        Error::PathConversionError(err)
     }
 }
 
 impl From<glob::PatternError> for Error {
     fn from(err: glob::PatternError) -> Self {
-        return Error::PatternError(err);
+        Error::PatternError(err)
     }
 }

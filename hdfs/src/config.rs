@@ -1,36 +1,21 @@
 use err::Error;
 use quick_xml::events::Event;
 use quick_xml::Reader;
-use regex::Regex;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-lazy_static! {
-    static ref re: Regex =
-        Regex::new(r"(?m)<name>(?P<key>(?s:.)*)</name><value>(?P<value>(?s:.)*)</value>").unwrap();
-}
-
+#[derive(Debug, PartialEq)]
 pub struct Config {
     pub config_map: HashMap<String, String>,
 }
 
 impl Config {
-    pub fn new(directory: &Path) -> Result<Config, Error> {
-        if !directory.exists() {
-            return Err(Error::DirectoryNotFound(String::from(
-                directory.to_str().unwrap_or_default(),
-            )));
-        }
-
-        let default_config_file = ["core-site.xml", "hdfs-site.xml"];
-
+    fn read_config_files(config_files: Vec<PathBuf>) -> Result<Config, Error> {
         let mut configmap = HashMap::new();
 
-        for filename in default_config_file.iter() {
-            let filepath = directory.join(filename);
-
+        for filepath in config_files.iter() {
             let f: File = File::open(filepath)?;
             let mut file = BufReader::new(f);
             let mut reader = Reader::from_reader(file);
@@ -87,9 +72,24 @@ impl Config {
         if let Some(port) = port {
             configmap.insert(String::from("port"), port);
         }
-        return Ok(Config {
+        Ok(Config {
             config_map: configmap,
-        });
+        })
+    }
+
+    pub fn new<P: AsRef<Path>>(directory: P) -> Result<Config, Error> {
+        let path = directory.as_ref().to_owned();
+        if !path.exists() {
+            return Err(Error::DirectoryNotFound(path));
+        }
+
+        let default_config_file = ["core-site.xml", "hdfs-site.xml"];
+        let config_files: Vec<PathBuf> = default_config_file
+            .iter()
+            .map(|filename| path.clone().join(filename))
+            .collect();
+
+        Config::read_config_files(config_files)
     }
 
     fn get_host_port(configmap: &HashMap<String, String>) -> (Option<String>, Option<String>) {
@@ -143,5 +143,43 @@ impl Config {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use config::Config;
+    use fs_test;
+    use std::collections::HashMap;
+    use std::env;
+    use std::fs;
+    use std::io::prelude::*;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn test_parse_xml_config() {
+        let xml_string = "
+        <root>
+            <property>
+            <name>name</name><value>value</value>
+             </property>
+        </root>
+        ";
+        let dir = fs_test::TempDir::default();
+        let dir_path = dir.path();
+
+        let file_path = dir_path.clone().join("a");
+        let mut file = fs::File::create(&file_path).unwrap();
+        file.write_all(xml_string.as_bytes());
+        drop(file);
+        let config = Config::read_config_files(vec![file_path]).unwrap();
+
+        let mut hashmap = HashMap::new();
+        hashmap.insert(String::from("name"), String::from("value"));
+        let expected = Config {
+            config_map: hashmap,
+        };
+
+        assert_eq!(expected, config)
     }
 }

@@ -7,7 +7,7 @@ use util::chars_to_str;
 pub enum Error {
     Unknown,
     FileNotFound(String),
-    DirectoryNotFound(String),
+    DirectoryNotFound(PathBuf),
     InvalidXmlFile(String),
     HdfsError(String),
     Io(io::Error),

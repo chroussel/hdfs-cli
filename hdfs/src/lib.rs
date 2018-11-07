@@ -1,13 +1,12 @@
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate lazy_static;
+#[cfg(test)]
+extern crate fs_test;
 extern crate itertools;
 extern crate libc;
 extern crate nix;
 extern crate quick_xml;
-extern crate regex;
-pub mod conf;
+pub mod config;
 pub mod err;
 pub mod hdfs;
 mod native;

@@ -2,7 +2,8 @@ use err;
 use filter::*;
 use std::fmt;
 use std::fs::{self, read_dir};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 macro_rules! try_opt_res {
     ($e: expr) => {
@@ -31,7 +32,7 @@ impl Iterator for ReadDirWrapper {
     fn next(&mut self) -> Option<Self::Item> {
         self.0
             .next()
-            .map(|r| r.map(|r2| DirEntryWrapper(r2)).map_err(err::Error::from))
+            .map(|r| r.map(DirEntryWrapper).map_err(err::Error::from))
     }
 }
 
@@ -124,8 +125,8 @@ impl<'a> Default for WalkBuilder<LinuxFS> {
 }
 
 pub struct Walk<T: FileSystem> {
-    path_stack: Box<Vec<(usize, PathBuf)>>,
-    dir_entries_stack: Box<Vec<PathBuf>>,
+    path_stack: Vec<(usize, PathBuf)>,
+    dir_entries_stack: Vec<PathBuf>,
     fs: T,
     max_depth: Option<usize>,
     filters: Vec<Box<dyn PathFilter>>,
@@ -142,12 +143,13 @@ impl<T: FileSystem> fmt::Debug for Walk<T> {
 }
 
 impl<T: FileSystem> Walk<T> {
-    pub fn new(
+    pub fn new<P: AsRef<Path>>(
         fs: T,
-        path: PathBuf,
+        path: P,
         filters: Vec<Box<dyn PathFilter>>,
     ) -> Result<Walk<T>, err::Error> {
         let mut filter_mut = filters;
+        let path = path.as_ref();
         let path_str = path.to_str().ok_or(err::Error::PathFormatError)?;
         if path_str.contains('*') || path_str.contains('?') {
             let glob_filter = GlobFilter::new(path_str)?;
@@ -177,10 +179,10 @@ impl<T: FileSystem> Walk<T> {
             dir_entries.push(root_path)
         }
         Ok(Walk {
-            path_stack: Box::new(path_stack),
-            dir_entries_stack: Box::new(dir_entries),
-            fs: fs,
-            max_depth: max_depth,
+            path_stack,
+            dir_entries_stack: dir_entries,
+            fs,
+            max_depth,
             filters: filter_mut,
         })
     }
@@ -196,7 +198,7 @@ impl<T: FileSystem> Walk<T> {
                 return Some(Ok(entry));
             }
         }
-        return None;
+        None
     }
 
     fn next_dir_entry(&mut self) -> Option<Result<(usize, PathBuf), T::Error>> {
@@ -209,7 +211,7 @@ impl<T: FileSystem> Walk<T> {
             return Some(Ok((depth, next_path)));
         }
 
-        return None;
+        None
     }
 }
 
@@ -227,7 +229,7 @@ fn path_root(path: &str) -> PathBuf {
             _ => slice.push(token),
         }
     }
-    return s;
+    s
 }
 
 fn pattern_root(path: &str) -> String {
@@ -238,7 +240,7 @@ fn pattern_root(path: &str) -> String {
             _ => s.push(token),
         }
     }
-    return s;
+    s
 }
 
 impl<T: FileSystem> Iterator for Walk<T> {

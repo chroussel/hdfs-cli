@@ -1,0 +1,11 @@
+[package]
+name = "fs_test"
+version = "0.1.0"
+authors = ["Charles Roussel <c.roussel@criteo.com>"]
+
+[lib]
+name = "fs_test"
+path = "src/lib.rs"
+
+[dependencies]
+rand = "0.5"

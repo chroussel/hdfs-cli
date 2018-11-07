@@ -3,5 +3,6 @@
 members = [
     "hdfs",
     "hdfs-cmd",
-    "walk"
+    "walk",
+    "fs_test"
 ]
