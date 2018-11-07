@@ -8,7 +8,6 @@ script:
   - cargo test --verbose --all
   - rustdoc --test README.md -L target
 after_success:
-  - travis-cargo --only nightly doc-upload
   - travis-cargo coveralls --no-sudo
 
 notifications:
