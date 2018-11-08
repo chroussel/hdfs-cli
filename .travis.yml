@@ -3,13 +3,19 @@ rust:
   - nightly
 cache: cargo
 sudo: false
-before_install:
-  - deps.sh
 
-script:
-  - cargo build --verbose --all
-  - cargo test --verbose --all
-  - rustdoc --test readme.md -L target
+jobs:
+  include:
+    - stage: build googletest
+      script: build_utils/googletest.sh
+    - stage: build libhdfs3
+      script: build_utils/libhdfs3.sh
+    - stage: build and test hdfs-cmd
+      script:
+        - cargo build --verbose --all
+        - cargo test --verbose --all
+        - rustdoc --test readme.md -L target
+
 after_success:
   - travis-cargo coveralls --no-sudo
 
