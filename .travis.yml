@@ -25,7 +25,10 @@ notifications:
 addons:
   apt:
     packages:
-      - libssl-dev
+      - openssl-dev
       - libgtest-dev
       - libboost-dev
       - libxml2-dev
+      - libkrb5-dev
+      - libgsasl7-dev
+      - uuid-dev
