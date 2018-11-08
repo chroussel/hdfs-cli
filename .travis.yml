@@ -25,7 +25,8 @@ notifications:
 addons:
   apt:
     packages:
-      - openssl-dev
+      - cmake
+      - libssl-dev
       - libgtest-dev
       - libboost-dev
       - libxml2-dev
