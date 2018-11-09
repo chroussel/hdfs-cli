@@ -12,5 +12,7 @@ mkdir -p build
         cmake ..
         make && make install
     )
+    sudo cp -a build/include/* /usr/include/.
+    sudo cp -a build/lib/* /usr/lib/.
 )
-sudo cp -a build/libhdfs3/libhdfs3/build/* libhdfs3/.
+sudo cp -a build/libhdfs3/libhdfs3/build/include/* libhdfs3/.
