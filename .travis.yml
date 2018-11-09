@@ -19,7 +19,10 @@ script:
   - rustdoc --test readme.md -L target
 
 after_success:
-  - cargo coveralls --all --verbose
+  - cargo coveralls -p fs_test
+  - cargo coveralls -p walk
+  - cargo coveralls -p hdfs
+  - cargo coveralls -p hdfs-cmd
 
 notifications:
   email:
