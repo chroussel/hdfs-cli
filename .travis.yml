@@ -2,7 +2,7 @@ language: rust
 rust:
   - nightly
 cache: cargo
-sudo: false
+sudo: required
 install:
   - ./build_utils/googletest.sh
   - ./build_utils/libhdfs3.sh
