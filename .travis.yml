@@ -4,9 +4,14 @@ rust:
 cache: cargo
 sudo: false
 install:
-  - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
   - ./build_utils/googletest.sh
   - ./build_utils/libhdfs3.sh
+
+before_script:
+  - export PATH=$HOME/.cargo/bin:$PATH
+  - cargo install cargo-update || echo "cargo-update already installed"
+  - cargo install cargo-travis || echo "cargo-travis already installed"
+  - cargo install-update -a
 
 script:
   - cargo build --verbose --all
@@ -14,7 +19,7 @@ script:
   - rustdoc --test readme.md -L target
 
 after_success:
-  - travis-cargo coveralls --no-sudo
+  - cargo coveralls --all
 
 notifications:
   email:
@@ -36,6 +41,5 @@ addons:
       - libelf-dev
       - libdw-dev
       - binutils-dev
-env:
-  global:
-    - TRAVIS_CARGO_NIGHTLY_FEATURE=nightly
+    sources:
+      - kalakris-cmake

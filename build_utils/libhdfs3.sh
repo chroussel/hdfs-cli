@@ -10,7 +10,7 @@ mkdir -p build
     (
         cd build
         cmake ..
-        make -j 2
+        make -j 4
         sudo make install
     )
 )
