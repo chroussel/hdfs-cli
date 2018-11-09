@@ -19,7 +19,7 @@ script:
   - rustdoc --test readme.md -L target
 
 after_success:
-  - cargo coveralls --all
+  - cargo coveralls --all --verbose
 
 notifications:
   email:
