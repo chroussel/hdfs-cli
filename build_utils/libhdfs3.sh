@@ -11,8 +11,6 @@ mkdir -p build
         cd build
         cmake ..
         make
-        make install
+        sudo make install
     )
-    sudo cp -a dist/include/* /usr/include/.
-    sudo cp -a dist/lib/* /usr/lib/.
 )
