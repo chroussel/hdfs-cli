@@ -30,3 +30,4 @@ addons:
       - libgsasl7-dev
       - uuid-dev
       - libprotobuf-dev
+      - protobuf-compiler
