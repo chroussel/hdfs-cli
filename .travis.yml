@@ -3,18 +3,14 @@ rust:
   - nightly
 cache: cargo
 sudo: false
+install:
+  - ./build_utils/googletest.sh
+  - ./build_utils/libhdfs3.sh
 
-jobs:
-  include:
-    - stage: build googletest
-      script: build_utils/googletest.sh
-    - stage: build libhdfs3
-      script: build_utils/libhdfs3.sh
-    - stage: build and test hdfs-cmd
-      script:
-        - cargo build --verbose --all
-        - cargo test --verbose --all
-        - rustdoc --test readme.md -L target
+script:
+  - cargo build --verbose --all
+  - cargo test --verbose --all
+  - rustdoc --test readme.md -L target
 
 after_success:
   - travis-cargo coveralls --no-sudo
@@ -33,3 +29,4 @@ addons:
       - libkrb5-dev
       - libgsasl7-dev
       - uuid-dev
+      - libprotobuf-dev
