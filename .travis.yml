@@ -4,6 +4,7 @@ rust:
 cache: cargo
 sudo: false
 install:
+  - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
   - ./build_utils/googletest.sh
   - ./build_utils/libhdfs3.sh
 
@@ -31,3 +32,7 @@ addons:
       - uuid-dev
       - libprotobuf-dev
       - protobuf-compiler
+
+env:
+  global:
+    - TRAVIS_CARGO_NIGHTLY_FEATURE=nightly
