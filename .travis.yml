@@ -9,7 +9,7 @@ install:
 
 before_script:
   - export PATH=$HOME/.cargo/bin:$PATH
-  - cargo install cargo-kcov
+  - cargo install cargo-kcov || echo "Cargo kcov already installed"
 
 script:
   - cargo build --verbose --all
@@ -17,7 +17,7 @@ script:
   - rustdoc --test readme.md -L target
 
 after_success:
-  - cargo kcov -all --verbose --no-clean-rebuild
+  - cargo kcov --all --verbose --no-clean-rebuild
 
 notifications:
   email:
