@@ -6,6 +6,7 @@ sudo: required
 install:
   - ./build_utils/googletest.sh
   - ./build_utils/libhdfs3.sh
+  - ./build_utils/kcov.sh
 
 before_script:
   - export PATH=$HOME/.cargo/bin:$PATH
