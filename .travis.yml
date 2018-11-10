@@ -18,7 +18,7 @@ script:
   - rustdoc --test readme.md -L target
 
 after_success:
-  - cargo kcov --all --verbose --no-clean-rebuild
+  - cargo kcov --all --verbose --no-clean-rebuild --coveralls
 
 notifications:
   email:
@@ -40,5 +40,6 @@ addons:
       - libelf-dev
       - libdw-dev
       - binutils-dev
+      - libbfd-dev
     sources:
       - kalakris-cmake
