@@ -44,6 +44,10 @@ impl FileSystem for HdfsFileSystem {
     type ReadDir = ReadDirWrapper;
     type Metadata = MetadataWrapper;
 
+    fn exists(&self, path: &PathBuf) -> bool {
+        self.0.exists(path).unwrap_or(false)
+    }
+
     fn read_dir(&self, path: &PathBuf) -> Result<Self::ReadDir, Self::Error> {
         Ok(ReadDirWrapper(self.0.list_directory(path)?))
     }

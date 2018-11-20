@@ -6,8 +6,8 @@ authors = ["Charles Roussel <c.roussel@criteo.com>"]
 [dependencies]
 hdfs = { path = "../hdfs" }
 walk = { path = "../walk" }
-env_logger = "0.5.13"
-clap = {version= "2.32.0", features = ["yaml"] }
+env_logger = "0.5"
+clap = {version= "2.32", features = ["yaml"] }
 serde = "1.0"
 serde_json = "1.0"
 serde_derive = "1.0"
