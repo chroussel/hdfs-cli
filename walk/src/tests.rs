@@ -254,6 +254,7 @@ fn test_list_root() {
         .with_path(PathBuf::from("/"))
         .build()
         .unwrap()
+        .map(|e| e.map(|d| d.path()))
         .collect();
 
     let mut list = list.unwrap();
@@ -275,6 +276,7 @@ fn test_list_directory_explicit() {
         .with_path(PathBuf::from("/var/"))
         .build()
         .unwrap()
+        .map(|e| e.map(|d| d.path()))
         .collect();
 
     let mut list = list.unwrap();
@@ -297,6 +299,7 @@ fn test_list_directory_implicit() {
         .with_path(PathBuf::from("/var"))
         .build()
         .unwrap()
+        .map(|e| e.map(|d| d.path()))
         .collect();
 
     let mut list = list.unwrap();
@@ -318,6 +321,7 @@ fn test_list_directory_empty() {
         .with_path(PathBuf::from("/va"))
         .build()
         .unwrap()
+        .map(|e| e.map(|d| d.path()))
         .collect();
 
     let mut list = list.unwrap();
@@ -339,6 +343,7 @@ fn test_list_directory_with_glob() {
         .with_path(PathBuf::from("/va*"))
         .build()
         .unwrap()
+        .map(|e| e.map(|d| d.path()))
         .collect();
 
     let mut list = list.unwrap();
@@ -360,6 +365,7 @@ fn test_list_directory_with_complex_glob() {
         .with_path(PathBuf::from("/va*/fi*"))
         .build()
         .unwrap()
+        .map(|e| e.map(|d| d.path()))
         .collect();
 
     let mut list = list.unwrap();
@@ -387,6 +393,7 @@ fn test_list_directory_with_question_mark() {
         .with_path(PathBuf::from("/var/file?a"))
         .build()
         .unwrap()
+        .map(|e| e.map(|d| d.path()))
         .collect();
 
     let mut list = list.unwrap();
@@ -422,6 +429,7 @@ fn test_list_directory_with_multiple_glob() {
         .with_path(PathBuf::from("/*/*/*"))
         .build()
         .unwrap()
+        .map(|e| e.map(|d| d.path()))
         .collect();
 
     let mut list = list.unwrap();
@@ -467,6 +475,7 @@ fn test_list_directory_with_globstar() {
         .with_path(PathBuf::from("/var*/**/file2"))
         .build()
         .unwrap()
+        .map(|e| e.map(|d| d.path()))
         .collect();
 
     let mut list = list.unwrap();

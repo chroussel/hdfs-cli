@@ -30,7 +30,7 @@ pub fn list_gateway<P: AsRef<Path>>(config_path: P) -> Result<Vec<String>, Error
     let config = config::Config::new(config_path.as_ref())?;
 
     if let Some(gateways) = config.get_string(GATEWAYS) {
-        Ok(gateways.split(",").map(|s| s.to_owned()).collect())
+        Ok(gateways.split(',').map(|s| s.to_owned()).collect())
     } else {
         return Ok(vec![]);
     }
@@ -43,7 +43,7 @@ pub fn get_hdfs<P: AsRef<Path>>(
 ) -> Result<HDFileSystem, Error> {
     let config = config::Config::new(config_path.as_ref())?;
 
-    let namenode = match host.or(config.get_string(HOST_STRING)) {
+    let namenode = match host.or_else(|| config.get_string(HOST_STRING)) {
         Some(name) => Ok(name),
         None => Err(Error::MissingConfig(String::from("host config missing"))),
     }?;
@@ -230,9 +230,9 @@ impl HDFileSystem {
         flag.set(OFlag::O_APPEND, options.append);
         flag.set(OFlag::O_RDONLY, options.read);
         let path = path.as_ref();
-        let path_str = path.to_str().ok_or(Error::PathConversionError(
-            path.to_string_lossy().into_owned(),
-        ))?;
+        let path_str = path
+            .to_str()
+            .ok_or_else(|| Error::PathConversionError(path.to_string_lossy().into_owned()))?;
         let f =
             unsafe { native::hdfsOpenFile(self.raw, str_to_chars(path_str), flag.bits(), 0, 0, 0) };
 
@@ -340,6 +340,17 @@ pub struct OpenOptions {
     write: bool,
     append: bool,
     create: bool,
+}
+
+impl Default for OpenOptions {
+    fn default() -> OpenOptions {
+        OpenOptions {
+            read: true,
+            write: false,
+            append: false,
+            create: false,
+        }
+    }
 }
 
 impl OpenOptions {

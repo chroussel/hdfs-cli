@@ -2,10 +2,10 @@ use err::Error;
 use std::path::PathBuf;
 use walk::walk::{DirEntryTrait, FileSystem, MetadataTrait};
 
-pub struct HdfsFileSystem(hdfs::hdfs::HDFileSystem);
+pub struct HdfsFileSystem<'a>(&'a hdfs::hdfs::HDFileSystem);
 
-impl HdfsFileSystem {
-    pub fn new(fs: hdfs::hdfs::HDFileSystem) -> HdfsFileSystem {
+impl<'a> HdfsFileSystem<'a> {
+    pub fn new(fs: &'a hdfs::hdfs::HDFileSystem) -> HdfsFileSystem {
         HdfsFileSystem(fs)
     }
 }
@@ -38,7 +38,7 @@ impl DirEntryTrait for DirEntryWrapper {
     }
 }
 
-impl FileSystem for HdfsFileSystem {
+impl<'a> FileSystem for HdfsFileSystem<'a> {
     type Error = Error;
     type DirEntry = DirEntryWrapper;
     type ReadDir = ReadDirWrapper;

@@ -12,7 +12,7 @@ pub struct Config {
 }
 
 impl Config {
-    fn read_config_files(config_files: Vec<PathBuf>) -> Result<Config, Error> {
+    fn read_config_files(config_files: &[PathBuf]) -> Result<Config, Error> {
         let mut configmap = HashMap::new();
 
         for filepath in config_files.iter() {
@@ -89,14 +89,14 @@ impl Config {
             .map(|filename| path.clone().join(filename))
             .collect();
 
-        Config::read_config_files(config_files)
+        Config::read_config_files(config_files.as_slice())
     }
 
     fn get_host_port(configmap: &HashMap<String, String>) -> (Option<String>, Option<String>) {
         if let Some(value) = configmap.get("fs.defaultFS") {
             if value.starts_with("hdfs://") {
                 let (_, text) = value.split_at(7);
-                let sp: Vec<&str> = text.splitn(2, ":").collect();
+                let sp: Vec<&str> = text.splitn(2, ':').collect();
                 let host = sp[0];
                 let port = sp[1];
                 return (Some(host.to_owned()), Some(port.to_owned()));
@@ -105,14 +105,14 @@ impl Config {
 
         if let Some(value) = configmap.get("dfs.namenode.rpc-address") {
             let (_, text) = value.split_at(7);
-            let sp: Vec<&str> = text.splitn(2, ":").collect();
+            let sp: Vec<&str> = text.splitn(2, ':').collect();
             let host = sp[0];
             let port = sp[1];
             return (Some(host.to_owned()), Some(port.to_owned()));
         }
 
         if let Some(value) = configmap.get("dfs.nameservices") {
-            let sp: Vec<&str> = value.splitn(2, ",").collect();
+            let sp: Vec<&str> = value.splitn(2, ',').collect();
             let host = sp[0];
             return (Some(host.to_owned()), None);
         }
@@ -172,7 +172,7 @@ mod test {
         let mut file = fs::File::create(&file_path).unwrap();
         file.write_all(xml_string.as_bytes());
         drop(file);
-        let config = Config::read_config_files(vec![file_path]).unwrap();
+        let config = Config::read_config_files(&[file_path]).unwrap();
 
         let mut hashmap = HashMap::new();
         hashmap.insert(String::from("name"), String::from("value"));

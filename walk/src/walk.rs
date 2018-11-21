@@ -191,14 +191,33 @@ fn path_root(path: &str) -> PathBuf {
     s
 }
 
+pub struct WalkItem {
+    path: PathBuf,
+    is_dir: bool,
+}
+
+impl WalkItem {
+    fn new(path: PathBuf, is_dir: bool) -> WalkItem {
+        WalkItem { path, is_dir }
+    }
+
+    pub fn path(&self) -> PathBuf {
+        self.path.to_owned()
+    }
+
+    pub fn is_dir(&self) -> bool {
+        self.is_dir
+    }
+}
+
 impl<T: FileSystem> Iterator for Walk<T> {
-    type Item = Result<PathBuf, T::Error>;
+    type Item = Result<WalkItem, T::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(entry) = self.resolve_next() {
             match entry {
-                Ok(Node::Dir(_, dir_entry)) => return Some(Ok(dir_entry)),
-                Ok(Node::File(path)) => return Some(Ok(path)),
+                Ok(Node::Dir(_, path)) => return Some(Ok(WalkItem::new(path, true))),
+                Ok(Node::File(path)) => return Some(Ok(WalkItem::new(path, false))),
                 Err(err) => return Some(Err(err)),
             }
         }

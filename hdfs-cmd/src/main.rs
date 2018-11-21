@@ -23,17 +23,44 @@ use std::path::PathBuf;
 
 fn ls(config_path: PathBuf, gateway: Option<&str>, path: PathBuf) {
     let hdfs_fs = hdfs::hdfs::get_hdfs(config_path, gateway, None).unwrap();
-
-    let walk = walk::walk::WalkBuilder::new(walk_hdfs::HdfsFileSystem::new(hdfs_fs))
+    let fs = walk_hdfs::HdfsFileSystem::new(&hdfs_fs);
+    let walk: Result<Vec<_>, _> = walk::walk::WalkBuilder::new(fs)
         .with_path(path)
         .build()
-        .unwrap();
+        .unwrap()
+        .collect();
 
-    for file in walk {
-        let path = file.unwrap();
-        let path_str = path.to_str().unwrap();
-        println!("{}", path_str);
+    let mut walk = walk.unwrap();
+
+    if walk.len() == 1 {
+        let item = walk.pop().unwrap();
+        print_item(&hdfs_fs, &item);
+    } else {
+        for item in walk {
+            let item = item;
+            println!("{}:", item.path().display());
+            print_item(&hdfs_fs, &item);
+        }
     }
+}
+
+fn print_item(hdfs_fs: &hdfs::hdfs::HDFileSystem, item: &walk::walk::WalkItem) {
+    if item.is_dir() {
+        print_dir(&hdfs_fs, &item.path());
+    } else {
+        println!("{}", file_name(&item.path()));
+    }
+}
+
+fn print_dir(hdfs_fs: &hdfs::hdfs::HDFileSystem, path: &PathBuf) {
+    for i in hdfs_fs.list_directory(path).unwrap() {
+        print!("{} ", file_name(&i.path()));
+    }
+    println!()
+}
+
+fn file_name(path: &PathBuf) -> &str {
+    path.file_name().unwrap().to_str().unwrap()
 }
 
 fn text(config_path: PathBuf, gateway: Option<&str>, path: PathBuf) {
