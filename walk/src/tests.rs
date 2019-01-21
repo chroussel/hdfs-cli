@@ -25,18 +25,37 @@ impl From<io::Error> for Error {
     }
 }
 
-#[derive(Default)]
-struct MockFS {
+struct MockFS<'a> {
     root: Node,
+    current_node: &'a Node,
 }
 
-impl MockFS {
-    fn new(root: Node) -> MockFS {
-        MockFS { root }
+impl<'a> Default for MockFS<'a> {
+    fn default() -> Self {
+        let root = Node::default();
+        MockFS {
+            current_node: &root,
+            root,
+        }
+    }
+}
+
+impl<'a> MockFS<'a> {
+    fn new(root: Node, current_dir: &PathBuf) -> Result<MockFS, Error> {
+        let current_node = MockFS::find_node_impl(&root, current_dir, &root)?;
+        Ok(MockFS { root, current_node })
     }
 
     fn find_node(&self, path: &PathBuf) -> Result<&Node, Error> {
-        let mut current_node = &self.root;
+        MockFS::find_node_impl(&self.root, path, self.current_node)
+    }
+
+    fn find_node_impl<'b>(
+        root: &'b Node,
+        path: &PathBuf,
+        current_dir_node: &'b Node,
+    ) -> Result<&'b Node, Error> {
+        let mut current_node = root;
 
         if current_node.path() == path.as_os_str() {
             return Ok(current_node);
@@ -44,6 +63,7 @@ impl MockFS {
 
         for c in path.components() {
             match c {
+                Component::CurDir => current_node = current_dir_node,
                 Component::RootDir => continue,
                 Component::Normal(value) => {
                     current_node = match current_node {
@@ -165,7 +185,7 @@ impl Iterator for ReadDirNode {
     }
 }
 
-impl FileSystem for MockFS {
+impl<'a> FileSystem for MockFS<'a> {
     type Error = Error;
     type DirEntry = DirEntryNode;
     type ReadDir = ReadDirNode;
@@ -173,6 +193,10 @@ impl FileSystem for MockFS {
 
     fn exists(&self, path: &PathBuf) -> bool {
         self.find_node(path).is_ok()
+    }
+
+    fn current_dir(&self) -> Result<PathBuf, Self::Error> {
+        Ok(self.current_node.path().to_owned())
     }
 
     fn read_dir(&self, path: &PathBuf) -> Result<Self::ReadDir, Self::Error> {
@@ -205,18 +229,22 @@ fn walk_1() {
     let _fs = MockFS::default();
 }
 
+fn fs<'a>(tree: NodeBuilder) -> MockFS<'a> {
+    MockFS::new(tree.build(&PathBuf::from("/")), &PathBuf::from("/")).unwrap()
+}
+
 #[test]
 fn walk_2() {
     let tree = td("/", vec![td("var", vec![]), tf("file")]);
 
-    let _fs = MockFS::new(tree.build(&PathBuf::from("")));
+    let _fs = fs(tree);
 }
 
 #[test]
 fn walk_3() {
     let tree = td("/", vec![td("var", vec![]), tf("file")]);
 
-    let fs = MockFS::new(tree.build(&PathBuf::from("")));
+    let fs = fs(tree);
 
     let entries: Result<Vec<_>, _> = fs.read_dir(&PathBuf::from("/")).unwrap().collect();
     let mut paths: Vec<_> = entries.unwrap().into_iter().map(|de| de.path).collect();
@@ -230,7 +258,7 @@ fn walk_4() {
         "/",
         vec![td("var", vec![tf("file1"), tf("file2")]), tf("file")],
     );
-    let fs = MockFS::new(tree.build(&PathBuf::from("/")));
+    let fs = fs(tree);
 
     let entries: Result<Vec<_>, _> = fs.read_dir(&PathBuf::from("/var")).unwrap().collect();
     let mut paths: Vec<_> = entries.unwrap().into_iter().map(|de| de.path).collect();
@@ -248,7 +276,7 @@ fn test_list_root() {
     enable_log();
     let tree = td("/", vec![td("var", vec![]), tf("file")]);
 
-    let fs = MockFS::new(tree.build(&PathBuf::from("")));
+    let fs = fs(tree);
     let walkbuilder = WalkBuilder::new(fs);
     let list: Result<Vec<_>, Error> = walkbuilder
         .with_path(PathBuf::from("/"))
@@ -270,7 +298,7 @@ fn test_list_directory_explicit() {
         vec![td("var", vec![tf("file1"), tf("file2")]), tf("file")],
     );
 
-    let fs = MockFS::new(tree.build(&PathBuf::from("")));
+    let fs = fs(tree);
     let walkbuilder = WalkBuilder::new(fs);
     let list: Result<Vec<_>, Error> = walkbuilder
         .with_path(PathBuf::from("/var/"))
@@ -293,7 +321,7 @@ fn test_list_directory_implicit() {
         vec![td("var", vec![tf("file1"), tf("file2")]), tf("file")],
     );
 
-    let fs = MockFS::new(tree.build(&PathBuf::from("")));
+    let fs = fs(tree);
     let walkbuilder = WalkBuilder::new(fs);
     let list: Result<Vec<_>, Error> = walkbuilder
         .with_path(PathBuf::from("/var"))
@@ -315,7 +343,7 @@ fn test_list_directory_empty() {
         vec![td("var", vec![tf("file1"), tf("file2")]), tf("file")],
     );
 
-    let fs = MockFS::new(tree.build(&PathBuf::from("")));
+    let fs = fs(tree);
     let walkbuilder = WalkBuilder::new(fs);
     let list: Result<Vec<_>, Error> = walkbuilder
         .with_path(PathBuf::from("/va"))
@@ -337,7 +365,7 @@ fn test_list_directory_with_glob() {
         vec![td("var", vec![tf("file1"), tf("file2")]), tf("file")],
     );
 
-    let fs = MockFS::new(tree.build(&PathBuf::from("")));
+    let fs = fs(tree);
     let walkbuilder = WalkBuilder::new(fs);
     let list: Result<Vec<_>, Error> = walkbuilder
         .with_path(PathBuf::from("/va*"))
@@ -359,7 +387,7 @@ fn test_list_directory_with_complex_glob() {
         vec![td("var", vec![tf("file1"), tf("file2")]), tf("file")],
     );
 
-    let fs = MockFS::new(tree.build(&PathBuf::from("")));
+    let fs = fs(tree);
     let walkbuilder = WalkBuilder::new(fs);
     let list: Result<Vec<_>, Error> = walkbuilder
         .with_path(PathBuf::from("/va*/fi*"))
@@ -387,7 +415,7 @@ fn test_list_directory_with_question_mark() {
         ],
     );
 
-    let fs = MockFS::new(tree.build(&PathBuf::from("")));
+    let fs = fs(tree);
     let walkbuilder = WalkBuilder::new(fs);
     let list: Result<Vec<_>, Error> = walkbuilder
         .with_path(PathBuf::from("/var/file?a"))
@@ -423,7 +451,7 @@ fn test_list_directory_with_multiple_glob() {
         ],
     );
 
-    let fs = MockFS::new(tree.build(&PathBuf::from("")));
+    let fs = fs(tree);
     let walkbuilder = WalkBuilder::new(fs);
     let list: Result<Vec<_>, Error> = walkbuilder
         .with_path(PathBuf::from("/*/*/*"))
@@ -469,10 +497,46 @@ fn test_list_directory_with_globstar() {
         ],
     );
 
-    let fs = MockFS::new(tree.build(&PathBuf::from("")));
+    let fs = fs(tree);
     let walkbuilder = WalkBuilder::new(fs);
     let list: Result<Vec<_>, Error> = walkbuilder
         .with_path(PathBuf::from("/var*/**/file2"))
+        .build()
+        .unwrap()
+        .map(|e| e.map(|d| d.path()))
+        .collect();
+
+    let mut list = list.unwrap();
+    list.sort();
+
+    assert_eq!(list, path_list(&["/var/file2", "/var3/var5/file2"]));
+}
+
+#[test]
+fn test_list_directory_with_current_path() {
+    enable_log();
+    let tree = td(
+        "/",
+        vec![
+            td("var", vec![tf("file1"), tf("file2")]),
+            td("var2", vec![tf("file3"), tf("file4")]),
+            td(
+                "var3",
+                vec![
+                    td("var4", vec![tf("file5"), tf("file8")]),
+                    td("var5", vec![tf("file2"), tf("file9")]),
+                    td("var6", vec![tf("file7"), tf("file10")]),
+                    tf("file11"),
+                ],
+            ),
+            tf("file0"),
+        ],
+    );
+
+    let fs = fs(tree);
+    let walkbuilder = WalkBuilder::new(fs);
+    let list: Result<Vec<_>, Error> = walkbuilder
+        .with_path(PathBuf::from("./file*"))
         .build()
         .unwrap()
         .map(|e| e.map(|d| d.path()))

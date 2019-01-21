@@ -20,40 +20,53 @@ use std::fs;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::PathBuf;
+use walk::walk::{DirEntryTrait, FileSystem, MetadataTrait};
+
+macro_rules! try_or_print {
+    ($e: expr) => {
+        match ($e) {
+            Ok(value) => value,
+            Err(e) => println!("{:?}", e),
+        }
+    };
+}
 
 fn ls(config_path: PathBuf, gateway: Option<&str>, path: PathBuf) {
-    let hdfs_fs = hdfs::hdfs::get_hdfs(config_path, gateway, None).unwrap();
-    let fs = walk_hdfs::HdfsFileSystem::new(&hdfs_fs);
-    let walk: Result<Vec<_>, _> = walk::walk::WalkBuilder::new(fs)
+    //let hdfs_fs = hdfs::hdfs::get_hdfs(config_path, gateway, None).unwrap();
+    //let fs = walk_hdfs::HdfsFileSystem::new(&hdfs_fs);
+    let fs = walk::linuxfs::LinuxFS::default();
+
+    let walk: Vec<Result<_, _>> = walk::walk::WalkBuilder::new(&fs)
         .with_path(path)
         .build()
         .unwrap()
         .collect();
 
-    let mut walk = walk.unwrap();
-
+    let mut walk = walk;
     if walk.len() == 1 {
-        let item = walk.pop().unwrap();
-        print_item(&hdfs_fs, &item);
+        try_or_print!(walk.pop().unwrap().map(|item| {
+            print_item(&fs, &item);
+        }));
     } else {
         for item in walk {
-            let item = item;
-            println!("{}:", item.path().display());
-            print_item(&hdfs_fs, &item);
+            try_or_print!(item.map(|i| print_item(&fs, &i)));
         }
     }
 }
 
-fn print_item(hdfs_fs: &hdfs::hdfs::HDFileSystem, item: &walk::walk::WalkItem) {
+fn print_item(fs: &walk::linuxfs::LinuxFS, item: &walk::walk::WalkItem, bool print_path) {
     if item.is_dir() {
-        print_dir(&hdfs_fs, &item.path());
-    } else {
+        println!("{}:", item.path().display());
+        print_dir(&fs, &item.path());
+    } else if print_path {
+    }    else {
         println!("{}", file_name(&item.path()));
     }
 }
 
-fn print_dir(hdfs_fs: &hdfs::hdfs::HDFileSystem, path: &PathBuf) {
-    for i in hdfs_fs.list_directory(path).unwrap() {
+fn print_dir(fs: &walk::linuxfs::LinuxFS, path: &PathBuf) {
+    for i in fs.read_dir(path).unwrap() {
+        let i = i.unwrap();
         print!("{} ", file_name(&i.path()));
     }
     println!()

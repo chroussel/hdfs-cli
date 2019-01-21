@@ -32,20 +32,20 @@ pub trait FileSystem {
         self.metadata(path).map(|a| a.is_dir()).unwrap_or(false)
     }
 
+    fn current_dir(&self) -> Result<PathBuf, Self::Error>;
     fn exists(&self, path: &PathBuf) -> bool;
     fn read_dir(&self, path: &PathBuf) -> Result<Self::ReadDir, Self::Error>;
     fn metadata(&self, path: &PathBuf) -> Result<Self::Metadata, Self::Error>;
 }
 
-#[derive(Default)]
-pub struct WalkBuilder<T: FileSystem> {
-    fs: T,
+pub struct WalkBuilder<'a, T: FileSystem> {
+    fs: &'a T,
     path: Option<PathBuf>,
     filters: Vec<Box<dyn PathFilter>>,
 }
 
-impl<'a, T: FileSystem> WalkBuilder<T> {
-    pub fn new(file_system: T) -> WalkBuilder<T> {
+impl<'a, T: FileSystem> WalkBuilder<'a, T> {
+    pub fn new(file_system: &T) -> WalkBuilder<T> {
         WalkBuilder {
             fs: file_system,
             path: None,
@@ -53,7 +53,7 @@ impl<'a, T: FileSystem> WalkBuilder<T> {
         }
     }
 
-    pub fn build(self) -> Result<Walk<T>, err::Error> {
+    pub fn build(self) -> Result<Walk<'a, T>, err::Error> {
         let path = self.path.ok_or(err::Error::NoPathDefined)?;
         Walk::new(self.fs, path, self.filters)
     }
@@ -75,14 +75,15 @@ enum Node {
     Dir(usize, PathBuf),
 }
 
-pub struct Walk<T: FileSystem> {
+pub struct Walk<'a, T: FileSystem> {
     path_stack: Vec<Node>,
-    fs: T,
+    fs: &'a T,
     max_depth: Option<usize>,
+    dir_filer: StartFilter,
     filters: Vec<Box<dyn PathFilter>>,
 }
 
-impl<T: FileSystem> fmt::Debug for Walk<T> {
+impl<'a, T: FileSystem> fmt::Debug for Walk<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         f.debug_struct("Walk")
             .field("path_stack", &self.path_stack)
@@ -91,9 +92,9 @@ impl<T: FileSystem> fmt::Debug for Walk<T> {
     }
 }
 
-impl<T: FileSystem> Walk<T> {
+impl<'a, T: FileSystem> Walk<'a, T> {
     pub fn new<P: AsRef<Path>>(
-        fs: T,
+        fs: &'a T,
         path: P,
         filters: Vec<Box<dyn PathFilter>>,
     ) -> Result<Walk<T>, err::Error> {
@@ -123,6 +124,7 @@ impl<T: FileSystem> Walk<T> {
 
         debug!("max depth: {:?}", max_depth);
         Ok(Walk {
+            dir_filer: start_with_filter(&path_str),
             path_stack,
             fs,
             max_depth,
@@ -137,6 +139,13 @@ impl<T: FileSystem> Walk<T> {
             .all(|f| path_str.map_or(false, |s| f.is_match(s)))
     }
 
+    fn is_valid_dir(&self, path: &PathBuf) -> bool {
+        let path_str = path.to_str();
+        path_str
+            .map(|s| self.dir_filer.is_match(s))
+            .unwrap_or(false)
+    }
+
     fn resolve_next(&mut self) -> Option<Result<Node, T::Error>> {
         while let Some(node) = self.path_stack.pop() {
             debug!("resolve_next: {:?}", node);
@@ -147,6 +156,10 @@ impl<T: FileSystem> Walk<T> {
                     }
                 }
                 Node::Dir(depth, path) => {
+                    if depth != 0 && !self.is_valid_dir(&path) {
+                        continue;
+                    }
+
                     if self.max_depth.map(|md| depth < md).unwrap_or(true) {
                         try_opt_res!(self.fill_path_stack(&path, depth));
                     }
@@ -172,6 +185,10 @@ impl<T: FileSystem> Walk<T> {
         }
         Ok(())
     }
+
+    fn is_recursive(&self) -> bool {
+        self.max_depth.is_none()
+    }
 }
 
 fn path_root(path: &str) -> PathBuf {
@@ -189,6 +206,17 @@ fn path_root(path: &str) -> PathBuf {
         }
     }
     s
+}
+
+fn start_with_filter<'a>(path: &str) -> StartFilter {
+    let mut slice = String::new();
+    for token in path.chars() {
+        match token {
+            '*' | '?' | '[' => break,
+            _ => slice.push(token),
+        }
+    }
+    StartFilter::new(slice)
 }
 
 pub struct WalkItem {
@@ -210,7 +238,7 @@ impl WalkItem {
     }
 }
 
-impl<T: FileSystem> Iterator for Walk<T> {
+impl<'a, T: FileSystem> Iterator for Walk<'a, T> {
     type Item = Result<WalkItem, T::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {

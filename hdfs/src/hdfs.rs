@@ -176,6 +176,14 @@ impl HDFileSystem {
         Ok(file)
     }
 
+    pub fn current_dir(&self) -> Result<PathBuf, Error> {
+        let mut buffer: Vec<c_char> = Vec::with_capacity(256);
+        let buffer_ptr = buffer.as_mut_ptr();
+        unsafe { native::hdfsGetWorkingDirectory(self.raw, buffer_ptr, 256) };
+
+        Ok(PathBuf::from(chars_to_str(buffer_ptr)))
+    }
+
     pub fn list_directory(&self, path: &PathBuf) -> Result<ReadDir, Error> {
         let mut count: c_int = 0;
         let path_str = path.to_str();

@@ -136,4 +136,5 @@ extern "C" {
     pub fn hdfsRename(srcFS: *const hdfsFS, src: *const c_char, dst: *const c_char);
     pub fn hdfsCreateDirectory(fs: *const hdfsFS, path: *const c_char) -> c_int;
     pub fn hdfsGetPathInfo(fs: *const hdfsFS, path: *const c_char) -> *const hdfsFileInfo;
+    pub fn hdfsGetWorkingDirectory(fs: *const hdfsFS, buffer: *const c_char, bufferSize: tSize);
 }

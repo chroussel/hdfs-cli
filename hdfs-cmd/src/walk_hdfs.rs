@@ -48,6 +48,10 @@ impl<'a> FileSystem for HdfsFileSystem<'a> {
         self.0.exists(path).unwrap_or(false)
     }
 
+    fn current_dir(&self) -> Result<PathBuf, Self::Error> {
+        Ok(self.0.current_dir()?)
+    }
+
     fn read_dir(&self, path: &PathBuf) -> Result<Self::ReadDir, Self::Error> {
         Ok(ReadDirWrapper(self.0.list_directory(path)?))
     }

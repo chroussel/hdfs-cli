@@ -166,11 +166,11 @@ mod test {
         </root>
         ";
         let dir = fs_test::TempDir::default();
-        let dir_path = dir.path();
+        let dir_path = dir.path().to_owned();
 
         let file_path = dir_path.clone().join("a");
         let mut file = fs::File::create(&file_path).unwrap();
-        file.write_all(xml_string.as_bytes());
+        file.write_all(xml_string.as_bytes()).unwrap();
         drop(file);
         let config = Config::read_config_files(&[file_path]).unwrap();
 

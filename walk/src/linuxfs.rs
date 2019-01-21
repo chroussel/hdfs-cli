@@ -46,6 +46,10 @@ impl FileSystem for LinuxFS {
         fs::metadata(path).is_ok()
     }
 
+    fn current_dir(&self) -> Result<PathBuf, Self::Error> {
+        ::std::env::current_dir().map_err(From::from)
+    }
+
     fn read_dir(&self, path: &PathBuf) -> Result<Self::ReadDir, Self::Error> {
         Ok(ReadDirWrapper(fs::read_dir(path)?))
     }
